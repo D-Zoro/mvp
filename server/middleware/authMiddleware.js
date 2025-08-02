@@ -12,7 +12,7 @@ const protect = async(req,res,next)=>{
           token = req.headers.authoriztion.split(" ")[1];
           const decoded = jwt.verify(token,process.env.JWT_SECRET);
 
-          const db = getDB();
+          const db = getDb();
           req.user = await db.collection("users").findOne({ _id: new ObjectId(decoded.id)});
           
           if(!req.user){
