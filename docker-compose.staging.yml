@@ -1,0 +1,70 @@
+version: "3.9"
+
+services:
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: books4all-backend-staging
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=false
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@db:5432/books4all
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+    depends_on:
+      - db
+      - redis
+    networks:
+      - books4all-network
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: books4all-frontend-staging
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=${API_URL}
+    depends_on:
+      - backend
+    networks:
+      - books4all-network
+    restart: unless-stopped
+
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: books4all-db-staging
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=books4all
+    volumes:
+      - postgres_data_staging:/var/lib/postgresql/data
+    networks:
+      - books4all-network
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: books4all-redis-staging
+    volumes:
+      - redis_data_staging:/data
+    networks:
+      - books4all-network
+    restart: unless-stopped
+
+networks:
+  books4all-network:
+    driver: bridge
+
+volumes:
+  postgres_data_staging:
+  redis_data_staging:

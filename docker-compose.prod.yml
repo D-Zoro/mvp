@@ -1,0 +1,103 @@
+version: "3.9"
+
+services:
+  # Backend API
+  backend:
+    image: ${REGISTRY}/books4all-backend:${TAG:-latest}
+    container_name: books4all-backend-prod
+    environment:
+      - DEBUG=false
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@db:5432/books4all
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+    depends_on:
+      - db
+      - redis
+    networks:
+      - books4all-network
+    restart: always
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  # Frontend
+  frontend:
+    image: ${REGISTRY}/books4all-frontend:${TAG:-latest}
+    container_name: books4all-frontend-prod
+    environment:
+      - NEXT_PUBLIC_API_URL=${API_URL}
+    depends_on:
+      - backend
+    networks:
+      - books4all-network
+    restart: always
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  # Nginx Load Balancer
+  nginx:
+    image: nginx:alpine
+    container_name: books4all-nginx-prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - books4all-network
+    restart: always
+
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: books4all-db-prod
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=books4all
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    networks:
+      - books4all-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: books4all-redis-prod
+    volumes:
+      - redis_data_prod:/data
+    networks:
+      - books4all-network
+    restart: always
+    command: redis-server --appendonly yes
+
+networks:
+  books4all-network:
+    driver: bridge
+
+volumes:
+  postgres_data_prod:
+  redis_data_prod:
