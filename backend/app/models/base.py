@@ -23,7 +23,7 @@ class Base(DeclarativeBase):
     - deleted_at timestamp (for soft delete support)
     """
     
-    __abstract__ = True
+    __abstract__ = True #dev-note: so that SQLAlchemy knows not to create a table for this model.
     
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

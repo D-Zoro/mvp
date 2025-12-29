@@ -2,7 +2,7 @@
 
 A production-grade book marketplace platform where users can buy, sell, and discover books.
 
-## 🚀 Tech Stack
+## ;-; Tech Stack
 
 ### Backend
 - **Framework**: FastAPI (Python 3.12)
@@ -54,7 +54,7 @@ Books4All/
 └── README.md
 ```
 
-## 🛠️ Getting Started
+## ;) Getting Started
 
 ### Prerequisites
 - Docker & Docker Compose
@@ -89,7 +89,7 @@ docker-compose -f docker-compose.dev.yml up --build
 
 - [Architecture Overview](./docs/ARCHITECTURE.md)
 
-## 🧪 Testing
+## ;-; Testing
 
 ### Backend
 ```bash

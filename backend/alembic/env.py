@@ -16,7 +16,8 @@ from alembic import context
 # Add the backend directory to the path so we can import app modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import all models to register them with SQLAlchemy
+# Import all models to register them with SQLAlchemy 
+# #dev-note E402-import not at top, F401-unused import <lint error suppression>>
 from app.models import Base  # noqa: E402
 from app.models import (  # noqa: E402, F401
     User,
