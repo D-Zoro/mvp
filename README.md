@@ -1,8 +1,7 @@
-# Books4All - Book Marketplace
+## The final bet
+shit started here with this and will end with this ;)
 
-A production-grade book marketplace platform where users can buy, sell, and discover books.
-
-## ;-; Tech Stack
+##  Tech Stack
 
 ### Backend
 - **Framework**: FastAPI (Python 3.12)
@@ -21,7 +20,7 @@ A production-grade book marketplace platform where users can buy, sell, and disc
 - **Orchestration**: Docker Compose
 - **Environments**: Development, Staging, Production
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 Books4All/
@@ -34,6 +33,7 @@ Books4All/
 │   │   ├── models/
 │   │   ├── schemas/
 │   │   ├── services/
+|   |   |── repositories/
 │   │   └── main.py
 │   ├── tests/
 │   ├── Dockerfile
@@ -54,55 +54,3 @@ Books4All/
 └── README.md
 ```
 
-## ;) Getting Started
-
-### Prerequisites
-- Docker & Docker Compose
-- Node.js 20+ (for local frontend development)
-- Python 3.12+ (for local backend development)
-
-### Development Setup
-
-1. Clone the repository:
-```bash
-git clone https://github.com/D-Zoro/mvp.git
-cd Books4All
-```
-
-2. Copy environment files:
-```bash
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env.local
-```
-
-3. Start the development environment:
-```bash
-docker-compose -f docker-compose.dev.yml up --build
-```
-
-4. Access the applications:
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/api/v1/docs
-
-## 📚 Documentation
-
-- [Architecture Overview](./docs/ARCHITECTURE.md)
-
-## ;-; Testing
-
-### Backend
-```bash
-cd backend
-pytest --cov=app tests/
-```
-
-### Frontend
-```bash
-cd frontend
-npm run test
-```
-
-## 📄 License
-
-MIT License
