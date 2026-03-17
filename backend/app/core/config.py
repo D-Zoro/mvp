@@ -123,6 +123,20 @@ class Settings(BaseSettings):
         description="Allowed image MIME types"
     )
     
+    # Stripe Payments
+    STRIPE_SECRET_KEY: Optional[str] = Field(default=None, description="Stripe secret key (sk_...)")
+    STRIPE_PUBLISHABLE_KEY: Optional[str] = Field(default=None, description="Stripe publishable key (pk_...)")
+    STRIPE_WEBHOOK_SECRET: Optional[str] = Field(default=None, description="Stripe webhook endpoint secret (whsec_...)")
+    
+    # Frontend
+    FRONTEND_URL: str = Field(default="http://localhost:3000", description="Frontend URL for redirect links")
+    
+    @property
+    def stripe_enabled(self) -> bool:
+        """Check if Stripe is configured."""
+        return bool(self.STRIPE_SECRET_KEY)
+    
+    
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
