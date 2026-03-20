@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "alembic==1.13.1",
     "black==23.12.1",
+    "bcrypt==4.1.2",
     "celery>=5.6.0",
     "fastapi[all]==0.109.0",
     "flake8==7.0.0",
@@ -14,7 +15,7 @@ dependencies = [
     "isort==5.13.2",
     "mypy==1.8.0",
     "passlib[bcrypt]==1.7.4",
-    "psycopg2-binary>=2.9.11",
+    "psycopg2-binary==2.9.9",
     "psycopg[binary]>=3.3.2",
     "pydantic==2.5.3",
     "pydantic-settings==2.1.0",
@@ -25,5 +26,23 @@ dependencies = [
     "python-multipart==0.0.6",
     "redis==5.0.1",
     "sqlalchemy==2.0.25",
+    "stripe==7.11.0",
     "uvicorn[standard]==0.27.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/core/database.py", "*/migrations/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
 ]

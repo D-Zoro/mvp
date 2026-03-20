@@ -18,6 +18,7 @@ from app.core.rate_limiter import rate_limit
 from app.models.order import OrderStatus
 from app.schemas.order import OrderCreate, OrderListResponse, OrderResponse
 from app.services import (
+    BookNotFoundError,
     InsufficientStockError,
     InvalidStatusTransitionError,
     NotOrderOwnerError,
@@ -36,7 +37,7 @@ router = APIRouter()
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _map_order_exception(exc: Exception) -> HTTPException:
-    if isinstance(exc, OrderNotFoundError):
+    if isinstance(exc, (OrderNotFoundError, BookNotFoundError)):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     if isinstance(exc, NotOrderOwnerError):
         return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
@@ -141,6 +142,7 @@ async def create_order(
         svc = OrderService(db)
         return await svc.create_order(buyer=current_user, order_data=payload)
     except (
+        BookNotFoundError,
         InsufficientStockError,
         InvalidStatusTransitionError,
         NotOrderOwnerError,

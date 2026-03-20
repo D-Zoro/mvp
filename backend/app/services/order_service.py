@@ -25,6 +25,7 @@ from app.schemas.order import (
     OrderResponse,
 )
 from app.services.exceptions import (
+    BookNotFoundError,
     InsufficientStockError,
     InvalidStatusTransitionError,
     OrderNotCancellableError,
@@ -106,9 +107,11 @@ class OrderService:
                 notes=order_data.notes,
             )
         except ValueError as exc:
-            # The repository raises ValueError for stock issues; re-raise
+            # The repository raises ValueError for stock/book issues; re-raise
             # as our typed exception so endpoint handlers can respond cleanly.
             msg = str(exc)
+            if "not found" in msg:
+                raise BookNotFoundError(msg) from exc
             if "Insufficient quantity" in msg:
                 # Parse repo message: "Insufficient quantity for {title}. Available: N, Requested: M"
                 raise InsufficientStockError(
