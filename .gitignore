@@ -14,8 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+
 parts/
 sdist/
 var/
@@ -145,7 +144,7 @@ dist
 
 # Gatsby files
 .cache/
-public
+
 
 # Next.js build output
 .vercel
@@ -206,4 +205,4 @@ storybook-static/
 tmp/
 temp/
 
-code_log/
+
