@@ -14,6 +14,7 @@ Business logic for the order lifecycle:
 import logging
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.order import Order, OrderStatus
@@ -95,7 +96,8 @@ class OrderService:
 
         Raises:
             InsufficientStockError: One or more books lack sufficient stock.
-            ValueError: Propagated from repository if book not found.
+            BookNotFoundError: One or more books not found.
+            ValueError: Other repository errors.
         """
         shipping_dict = order_data.shipping_address.model_dump()
 
@@ -106,6 +108,18 @@ class OrderService:
                 shipping_address=shipping_dict,
                 notes=order_data.notes,
             )
+        except IntegrityError as exc:
+            # CHECK constraint violation (quantity < 0) or other integrity error
+            if "quantity" in str(exc).lower() or "check" in str(exc).lower():
+                logger.warning(
+                    "Order creation failed due to stock exhaustion: buyer=%s items=%d",
+                    buyer.id,
+                    len(order_data.items),
+                )
+                raise InsufficientStockError(
+                    "Insufficient stock for one or more items. Please try again."
+                ) from exc
+            raise
         except ValueError as exc:
             # The repository raises ValueError for stock/book issues; re-raise
             # as our typed exception so endpoint handlers can respond cleanly.
@@ -115,9 +129,7 @@ class OrderService:
             if "Insufficient quantity" in msg:
                 # Parse repo message: "Insufficient quantity for {title}. Available: N, Requested: M"
                 raise InsufficientStockError(
-                    book_title="(see detail)",
-                    available=0,
-                    requested=0,
+                    "Insufficient stock for one or more items. Please try again."
                 ) from exc
             raise
 
