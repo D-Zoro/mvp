@@ -231,10 +231,10 @@ class OrderService:
         orders = await self.order_repo.get_orders_for_seller(
             seller_id, skip=skip, limit=page_size, status=status
         )
+        total = await self.order_repo.count_orders_for_seller(seller_id, status=status)
         items = [OrderResponse.model_validate(o) for o in orders]
-        # total count not available without extra query — use len for now
         return OrderListResponse.create(
-            items=items, total=len(items), page=page, page_size=page_size
+            items=items, total=total, page=page, page_size=page_size
         )
 
     # ─────────────────────────────────────────────

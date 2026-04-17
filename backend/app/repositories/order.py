@@ -395,7 +395,42 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         
         result = await self.db.execute(query)
         return list(result.scalars().all())
-    
+
+    async def count_orders_for_seller(
+        self,
+        seller_id: UUID,
+        *,
+        status: Optional[OrderStatus] = None,
+    ) -> int:
+        """
+        Count orders containing books from a specific seller.
+
+        Args:
+            seller_id: Seller's UUID
+            status: Optional status filter
+
+        Returns:
+            Number of orders containing seller's books
+        """
+        # Join through order items to find orders with seller's books
+        query = (
+            select(func.count(Order.id))
+            .distinct()
+            .select_from(Order)
+            .join(OrderItem, Order.id == OrderItem.order_id)
+            .join(Book, OrderItem.book_id == Book.id)
+            .where(
+                Book.seller_id == seller_id,
+                Order.deleted_at.is_(None),
+            )
+        )
+
+        if status:
+            query = query.where(Order.status == status)
+
+        result = await self.db.execute(query)
+        return result.scalar() or 0
+
     async def get_by_payment_id(
         self,
         stripe_payment_id: str,
