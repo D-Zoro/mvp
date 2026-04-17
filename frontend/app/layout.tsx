@@ -1,22 +1,25 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
+import { Manrope, Inter } from "next/font/google";
+import { Header } from "@/components/layout/Header";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { Toaster } from "sonner";
+import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const manrope = Manrope({
   subsets: ["latin"],
+  variable: "--font-manrope",
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const inter = Inter({
   subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
   title: "Books4All",
-  description: "Second-hand book marketplace",
+  description: "The Digital Curator - Second-hand book marketplace",
 };
 
 export default function RootLayout({
@@ -25,12 +28,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+    <html lang="en" className={`${manrope.variable} ${inter.variable}`}>
+      <body className="font-body bg-surface text-on-surface antialiased">
         <QueryProvider>
-          {children}
+          <Header />
+          <main className="pt-20 min-h-screen">
+            {children}
+          </main>
           <Toaster richColors position="top-right" />
         </QueryProvider>
       </body>

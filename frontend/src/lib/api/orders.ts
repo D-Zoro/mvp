@@ -29,6 +29,13 @@ export const createOrder = (data: CreateOrderRequest): Promise<Order> =>
     data,
   });
 
+export const getMyOrders = (page = 1, size = 10): Promise<PaginatedResponse<Order>> =>
+  apiRequest<PaginatedResponse<Order>>({
+    url: "/orders/my-orders",
+    method: "GET",
+    params: { page, size },
+  });
+
 export const cancelOrder = (id: string): Promise<Order> =>
   apiRequest<Order>({
     url: `/orders/${id}/cancel`,

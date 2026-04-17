@@ -9,6 +9,10 @@ import os
 import sys
 from logging.config import fileConfig
 
+##async driver
+import asyncio
+from sqlalchemy.ext.asyncio import create_async_engine
+
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
@@ -81,26 +85,26 @@ def run_migrations_online() -> None:
     In this scenario we need to create an Engine
     and associate a connection with the context.
     """
-    configuration = config.get_section(config.config_ini_section) or {}
-    configuration["sqlalchemy.url"] = get_url()
-    
-    connectable = engine_from_config(
-        configuration,
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    cmd_line_url = get_url()
 
-    with connectable.connect() as connection:
+    connectable = create_async_engine(cmd_line_url)
+    
+    async def do_run_migrations():
+        async with connectable.connect() as connection:
+            # This 'run_sync' is the magic that fixes your error
+            await connection.run_sync(do_run_metadata_migrations)
+        await connectable.dispose()
+
+    def do_run_metadata_migrations(connection):
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            compare_type=True,
-            compare_server_default=True,
         )
-
         with context.begin_transaction():
             context.run_migrations()
 
+    # Run the async function
+    asyncio.run(do_run_migrations())
 
 if context.is_offline_mode():
     run_migrations_offline()

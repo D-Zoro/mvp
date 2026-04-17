@@ -29,6 +29,16 @@ export const createBook = (data: CreateBookRequest): Promise<Book> =>
     data,
   });
 
+export const getMyListings = (
+  page = 1,
+  size = 20
+): Promise<PaginatedResponse<Book>> =>
+  apiRequest<PaginatedResponse<Book>>({
+    url: "/books/my-listings",
+    method: "GET",
+    params: { page, size },
+  });
+
 export const updateBook = (id: string, data: UpdateBookRequest): Promise<Book> =>
   apiRequest<Book, UpdateBookRequest>({
     url: `/books/${id}`,

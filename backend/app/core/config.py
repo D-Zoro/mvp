@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     
     # Database
     DATABASE_URL: str = Field(
-        default="postgresql+asyncpg://neo:gottacomedmra@localhost:5432/books4all_dev",
+        # default="postgresql+asyncpg://neo:gottacomedmra@localhost:5432/books4all_dev",
         description="PostgreSQL connection URL (async driver)"
     )
     DATABASE_POOL_SIZE: int = Field(default=5, ge=1, le=20, description="Connection pool size")

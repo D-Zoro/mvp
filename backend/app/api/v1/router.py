@@ -12,6 +12,7 @@ from app.api.v1.endpoints.books import router as books_router
 from app.api.v1.endpoints.orders import router as orders_router
 from app.api.v1.endpoints.payments import router as payments_router
 from app.api.v1.endpoints.reviews import router as reviews_router
+from app.api.v1.endpoints.upload import router as upload_router
 
 api_router = APIRouter()
 
@@ -20,6 +21,12 @@ api_router.include_router(
     auth_router,
     prefix="/auth",
     tags=["Authentication"],
+)
+
+# Upload
+api_router.include_router(
+    upload_router,
+    tags=["Upload"],
 )
 
 # Books & Reviews — no prefix; individual routes already carry /books/...

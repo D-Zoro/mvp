@@ -1,11 +1,5 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from "axios";
-
-import {
-  clearAuthTokens,
-  getAccessToken,
-  getRefreshToken,
-  setAuthTokens,
-} from "@/lib/auth/tokenStorage";
+import { useAuthStore } from "@/store/authStore";
 import { ApiClientError, ApiErrorBody } from "@/lib/api/types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -22,25 +16,32 @@ const client: AxiosInstance = axios.create({
 let refreshPromise: Promise<string | null> | null = null;
 
 const refreshAccessToken = async (): Promise<string | null> => {
-  const refreshToken = getRefreshToken();
+  const refreshToken = useAuthStore.getState().refreshToken;
   if (!refreshToken) return null;
 
-  const response = await axios.post<{ access_token: string; refresh_token: string }>(
-    `${BASE_URL}${API_PREFIX}/auth/refresh`,
-    { refresh_token: refreshToken },
-    { headers: { "Content-Type": "application/json" } }
-  );
+  try {
+    const response = await axios.post<{ access_token: string; refresh_token: string }>(
+      `${BASE_URL}${API_PREFIX}/auth/refresh`,
+      { refresh_token: refreshToken },
+      { headers: { "Content-Type": "application/json" } }
+    );
 
-  const nextAccess = response.data.access_token;
-  const nextRefresh = response.data.refresh_token || refreshToken;
+    const nextAccess = response.data.access_token;
+    const nextRefresh = response.data.refresh_token || refreshToken;
 
-  setAuthTokens({ accessToken: nextAccess, refreshToken: nextRefresh });
+    useAuthStore.getState().setTokens({ 
+      accessToken: nextAccess, 
+      refreshToken: nextRefresh 
+    });
 
-  return nextAccess;
+    return nextAccess;
+  } catch {
+    return null;
+  }
 };
 
 client.interceptors.request.use((config) => {
-  const token = getAccessToken();
+  const token = useAuthStore.getState().accessToken;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -72,7 +73,7 @@ client.interceptors.response.use(
 
         const newAccessToken = await refreshPromise;
         if (!newAccessToken) {
-          clearAuthTokens();
+          useAuthStore.getState().clearAuth();
           return Promise.reject(toApiClientError(error));
         }
 
@@ -83,7 +84,7 @@ client.interceptors.response.use(
 
         return client(originalRequest);
       } catch {
-        clearAuthTokens();
+        useAuthStore.getState().clearAuth();
         return Promise.reject(toApiClientError(error));
       }
     }
