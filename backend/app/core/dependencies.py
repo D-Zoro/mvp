@@ -11,7 +11,7 @@ Provides:
 from typing import Annotated, AsyncGenerator, Callable, Optional
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -343,3 +343,120 @@ class PaginationParams:
 
 # Type alias for pagination dependency
 Pagination = Annotated[PaginationParams, Depends()]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Rate Limiting Dependency (CRIT-04)
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def require_rate_limit(
+    request: Request,
+    endpoint_name: str,
+    calls: int = 5,
+    period: int = 900,
+) -> Request:
+    """
+    Rate limit check using Redis.
+
+    Returns request if not limited, raises HTTPException(429) if limited.
+
+    Args:
+        request: FastAPI request object
+        endpoint_name: Endpoint name for rate limit key (e.g., "login", "signup")
+        calls: Maximum calls allowed in period
+        period: Time period in seconds
+
+    Returns:
+        Request: The request object if rate limit check passes
+
+    Raises:
+        HTTPException: 429 Too Many Requests if rate limit exceeded
+
+    Example:
+        @router.post("/login")
+        async def login(
+            request: Request,
+            rate_limit_check: Request = Depends(
+                lambda req: require_rate_limit(req, "login", 5, 900)
+            ),
+        ):
+            ...
+    """
+    import logging
+    import time
+
+    from redis import asyncio as aioredis
+
+    logger = logging.getLogger(__name__)
+
+    # Extract IP address from request
+    if not hasattr(request, "client") or request.client is None:
+        ip_address = "unknown"
+    else:
+        # Check for X-Forwarded-For header (reverse proxy)
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            ip_address = forwarded.split(",")[0].strip()
+        else:
+            ip_address = request.client.host
+
+    try:
+        # Connect to Redis
+        redis = await aioredis.from_url(
+            settings.REDIS_URL,
+            encoding="utf-8",
+            decode_responses=True,
+        )
+
+        # Build Redis key with hour bucket for sliding window
+        now = time.time()
+        hour_bucket = int(now // 3600)  # Group by hour
+        redis_key = f"rate_limit:{endpoint_name}:{ip_address}:{hour_bucket}"
+
+        # Increment counter
+        counter = await redis.incr(redis_key)
+
+        # Set TTL on first request to this key
+        if counter == 1:
+            await redis.expire(redis_key, period)
+
+        # Get TTL to calculate retry-after
+        ttl = await redis.ttl(redis_key)
+
+        # Check if rate limited
+        if counter > calls:
+            retry_after = ttl if ttl > 0 else period
+            logger.info(
+                f"Rate limit exceeded for {endpoint_name} from {ip_address}. "
+                f"Remaining: {retry_after}s"
+            )
+            await redis.close()
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Too many requests. Try again in {retry_after} seconds.",
+                headers={
+                    "Retry-After": str(retry_after),
+                },
+            )
+
+        # Log successful rate limit check
+        remaining = calls - counter
+        logger.debug(
+            f"Rate limit check passed for {endpoint_name} from {ip_address}. "
+            f"Remaining: {remaining}/{calls}"
+        )
+
+        await redis.close()
+        return request
+
+    except HTTPException:
+        # Re-raise HTTP exceptions (rate limit exceeded)
+        raise
+    except Exception as exc:
+        # Handle Redis connection errors gracefully
+        logger.warning(
+            f"Redis connection error in rate limiting for {endpoint_name}: {exc}. "
+            f"Allowing request to proceed."
+        )
+        # Don't block request if Redis is unavailable
+        return request
