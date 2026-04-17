@@ -22,7 +22,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from app.core.dependencies import ActiveUser, DBSession
+from app.core.dependencies import ActiveUser, DBSession, require_rate_limit
 from app.core.rate_limiter import rate_limit
 from app.schemas.auth import (
     AuthResponse,
@@ -91,13 +91,15 @@ def _map_auth_exception(exc: Exception) -> HTTPException:
         422: {"description": "Validation error"},
     },
 )
-@rate_limit(calls=10, period=60)
 async def register(
     request: Request,
     payload: RegisterRequest,
     db: DBSession,
+    rate_limit_check: Request = Depends(
+        lambda req: require_rate_limit(req, "signup", 3, 3600)
+    ),
 ) -> AuthResponse:
-    """Register a new user account."""
+    """Register a new user account (rate limited: 3 per hour)."""
     try:
         svc = AuthService(db)
         return await svc.register(
@@ -129,13 +131,15 @@ async def register(
         403: {"description": "Account inactive"},
     },
 )
-@rate_limit(calls=5, period=900)  # 5 attempts / 15 min
 async def login(
     request: Request,
     payload: LoginRequest,
     db: DBSession,
+    rate_limit_check: Request = Depends(
+        lambda req: require_rate_limit(req, "login", 5, 900)
+    ),
 ) -> AuthResponse:
-    """Login and receive access + refresh tokens."""
+    """Login and receive access + refresh tokens (rate limited: 5 per 15 minutes)."""
     try:
         svc = AuthService(db)
         return await svc.login(email=payload.email, password=payload.password)
@@ -275,13 +279,15 @@ async def forgot_password(
         400: {"description": "Invalid or expired token"},
     },
 )
-@rate_limit(calls=5, period=300)
 async def reset_password(
     request: Request,
     payload: PasswordResetConfirm,
     db: DBSession,
+    rate_limit_check: Request = Depends(
+        lambda req: require_rate_limit(req, "password-reset", 3, 3600)
+    ),
 ) -> UserResponse:
-    """Confirm password reset with token and new password."""
+    """Confirm password reset with token and new password (rate limited: 3 per hour)."""
     try:
         svc = AuthService(db)
         return await svc.confirm_password_reset(
