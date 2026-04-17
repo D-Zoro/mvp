@@ -68,6 +68,78 @@ class PaymentService:
         self.order_repo = OrderRepository(db)
 
     # ─────────────────────────────────────────────
+    # Webhook Deduplication (CRIT-02)
+    # ─────────────────────────────────────────────
+
+    async def _check_webhook_dedup(self, event_id: str) -> dict | None:
+        """
+        Check if webhook event already processed.
+
+        Returns cached result if found, None if new event.
+
+        Args:
+            event_id: Stripe event ID (e.g., 'evt_1ABC...')
+
+        Returns:
+            dict: Cached event result if found, None if new event
+        """
+        try:
+            from redis import asyncio as aioredis
+
+            redis = await aioredis.from_url(
+                settings.REDIS_URL,
+                encoding="utf-8",
+                decode_responses=True,
+            )
+
+            redis_key = f"webhook_event:{event_id}"
+            cached_value = await redis.get(redis_key)
+            await redis.close()
+
+            if cached_value:
+                logger.info(f"Webhook duplicate detected: event_id={event_id}")
+                return json.loads(cached_value)
+
+            return None
+
+        except Exception as exc:
+            logger.warning(
+                f"Redis error in webhook dedup check: {exc}. Allowing request."
+            )
+            return None
+
+    async def _cache_webhook_result(self, event_id: str, result: dict) -> None:
+        """
+        Cache webhook event result in Redis for deduplication.
+
+        TTL = 24 hours (86400 seconds).
+
+        Args:
+            event_id: Stripe event ID
+            result: Result dict to cache
+        """
+        try:
+            from redis import asyncio as aioredis
+
+            redis = await aioredis.from_url(
+                settings.REDIS_URL,
+                encoding="utf-8",
+                decode_responses=True,
+            )
+
+            redis_key = f"webhook_event:{event_id}"
+            await redis.setex(redis_key, 86400, json.dumps(result))
+            await redis.close()
+
+            logger.debug(f"Cached webhook event for 24 hours: event_id={event_id}")
+
+        except Exception as exc:
+            logger.warning(
+                f"Redis error in webhook result caching: {exc}. "
+                f"Continuing without cache."
+            )
+
+    # ─────────────────────────────────────────────
     # Create Checkout Session
     # ─────────────────────────────────────────────
 
