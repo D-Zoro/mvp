@@ -2,6 +2,7 @@
 Order repository for order-specific database operations.
 """
 
+import logging
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -14,6 +15,8 @@ from app.models.book import Book
 from app.models.order import Order, OrderItem, OrderStatus
 from app.repositories.base import BaseRepository
 from app.schemas.order import OrderCreate, OrderItemCreate, OrderUpdate
+
+logger = logging.getLogger(__name__)
 
 
 class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
@@ -90,17 +93,27 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         order_items_data = []
         
         for item in items:
-            # Get book
-            book_query = select(Book).where(
-                Book.id == item.book_id,
-                Book.deleted_at.is_(None),
+            # Get book with row-level lock to prevent race condition
+            book_query = (
+                select(Book)
+                .where(
+                    Book.id == item.book_id,
+                    Book.deleted_at.is_(None),
+                )
+                .with_for_update()  # Lock row during transaction
             )
             result = await self.db.execute(book_query)
             book = result.scalar_one_or_none()
-            
+
             if book is None:
                 raise ValueError(f"Book {item.book_id} not found")
-            
+
+            # Log successful lock acquisition
+            logger.debug(
+                f"Acquired lock for book {book.id}. "
+                f"Available quantity: {book.quantity}, Requested: {item.quantity}"
+            )
+
             if book.quantity < item.quantity:
                 raise ValueError(
                     f"Insufficient quantity for {book.title}. "
