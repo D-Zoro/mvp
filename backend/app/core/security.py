@@ -3,10 +3,11 @@ Security utilities for authentication and authorization.
 
 Provides:
 - Password hashing and verification using bcrypt
-- JWT token creation and verification
+- JWT token creation and verification with key versioning support
 - Access and refresh token management
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import UUID
@@ -16,6 +17,9 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 
 from app.core.config import settings
+from app.core.keys import get_active_key, get_key_for_verification
+
+logger = logging.getLogger(__name__)
 
 
 # Password hashing context using bcrypt
@@ -29,11 +33,12 @@ pwd_context = CryptContext(
 class TokenPayload(BaseModel):
     """
     JWT token payload structure.
-    
+
     Attributes:
         sub: Subject (user_id as string)
         role: User role (buyer, seller, admin)
         type: Token type (access or refresh)
+        key_version: Key version used to sign token (for rotation support)
         exp: Expiration timestamp
         iat: Issued at timestamp
         jti: JWT ID for token revocation tracking
@@ -41,6 +46,7 @@ class TokenPayload(BaseModel):
     sub: str
     role: str
     type: str  # "access" or "refresh"
+    key_version: int = 1  # Default to 1 for backward compatibility
     exp: datetime
     iat: datetime
     jti: Optional[str] = None
@@ -101,44 +107,49 @@ def create_access_token(
     jti: Optional[str] = None,
 ) -> str:
     """
-    Create a JWT access token.
-    
+    Create a JWT access token with key versioning.
+
     Args:
         user_id: User's UUID
         role: User's role (buyer, seller, admin)
         expires_delta: Optional custom expiration time
         jti: Optional JWT ID for revocation tracking
-        
+
     Returns:
         str: Encoded JWT access token
-        
+
     Example:
         >>> token = create_access_token(user.id, user.role.value)
         >>> payload = decode_token(token)
         >>> payload["sub"] == str(user.id)
         True
     """
+    from app.core.keys import get_active_key
+
     now = datetime.now(timezone.utc)
-    
+
     if expires_delta:
         expire = now + expires_delta
     else:
         expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    
+
+    key_version, secret = get_active_key()
+
     payload = {
         "sub": str(user_id),
         "role": role,
         "type": "access",
+        "key_version": key_version,  # Add key version for multi-key support
         "exp": expire,
         "iat": now,
     }
-    
+
     if jti:
         payload["jti"] = jti
-    
+
     return jwt.encode(
         payload,
-        settings.SECRET_KEY,
+        secret,
         algorithm=settings.JWT_ALGORITHM,
     )
 
@@ -150,40 +161,45 @@ def create_refresh_token(
     jti: Optional[str] = None,
 ) -> str:
     """
-    Create a JWT refresh token.
-    
+    Create a JWT refresh token with key versioning.
+
     Refresh tokens have a longer expiry and are used to obtain new access tokens.
-    
+
     Args:
         user_id: User's UUID
         role: User's role
         expires_delta: Optional custom expiration time
         jti: Optional JWT ID for revocation tracking
-        
+
     Returns:
         str: Encoded JWT refresh token
     """
+    from app.core.keys import get_active_key
+
     now = datetime.now(timezone.utc)
-    
+
     if expires_delta:
         expire = now + expires_delta
     else:
         expire = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    
+
+    key_version, secret = get_active_key()
+
     payload = {
         "sub": str(user_id),
         "role": role,
         "type": "refresh",
+        "key_version": key_version,  # Add key version for multi-key support
         "exp": expire,
         "iat": now,
     }
-    
+
     if jti:
         payload["jti"] = jti
-    
+
     return jwt.encode(
         payload,
-        settings.SECRET_KEY,
+        secret,
         algorithm=settings.JWT_ALGORITHM,
     )
 
@@ -224,34 +240,56 @@ def create_token_pair(
 def decode_token(token: str) -> dict[str, Any]:
     """
     Decode and verify a JWT token.
-    
+
+    Supports both current and deprecated key versions for backward compatibility
+    during secret rotation.
+
     Args:
         token: JWT token string
-        
+
     Returns:
         dict: Decoded token payload
-        
+
     Raises:
         JWTError: If token is invalid or expired
     """
-    return jwt.decode(
-        token,
-        settings.SECRET_KEY,
-        algorithms=[settings.JWT_ALGORITHM],
-    )
+    from app.core.keys import get_key_for_verification
+
+    try:
+        # First, decode without verification to extract key_version
+        unverified = jwt.get_unverified_claims(token)
+        key_version = unverified.get("key_version", 1)  # Default to v1 for old tokens
+
+        # Get the appropriate key for this version
+        secret = get_key_for_verification(key_version)
+        if not secret:
+            raise JWTError(f"Invalid or expired key version: {key_version}")
+
+        # Now verify with the correct key
+        return jwt.decode(
+            token,
+            secret,
+            algorithms=[settings.JWT_ALGORITHM],
+        )
+    except JWTError:
+        raise
+    except Exception as exc:
+        raise JWTError(f"Token decode failed: {exc}") from exc
 
 
 def verify_token(token: str, token_type: str = "access") -> Optional[TokenPayload]:
     """
     Verify a JWT token and return its payload.
-    
+
+    Supports both current and deprecated key versions.
+
     Args:
         token: JWT token string
         token_type: Expected token type ("access" or "refresh")
-        
+
     Returns:
         TokenPayload if valid, None if invalid
-        
+
     Example:
         >>> payload = verify_token(access_token, "access")
         >>> if payload:
@@ -259,15 +297,16 @@ def verify_token(token: str, token_type: str = "access") -> Optional[TokenPayloa
     """
     try:
         payload = decode_token(token)
-        
+
         # Verify token type
         if payload.get("type") != token_type:
             return None
-        
+
         return TokenPayload(
             sub=payload["sub"],
             role=payload["role"],
             type=payload["type"],
+            key_version=payload.get("key_version", 1),  # Default to 1 for old tokens
             exp=datetime.fromtimestamp(payload["exp"], tz=timezone.utc),
             iat=datetime.fromtimestamp(payload["iat"], tz=timezone.utc),
             jti=payload.get("jti"),
