@@ -255,6 +255,9 @@ class PaymentService:
           - checkout.session.completed  → marks order PAID
           - payment_intent.payment_failed → marks order PENDING (retry allowed)
 
+        Webhook events are deduplicated using Redis cache to prevent
+        duplicate processing of the same event.
+
         Args:
             payload: Raw request body bytes.
             stripe_signature: Value of the ``Stripe-Signature`` HTTP header.
@@ -287,20 +290,38 @@ class PaymentService:
                 f"Webhook payload parsing failed: {exc}"
             ) from exc
 
+        # Extract event ID for deduplication
+        event_id: str = event.get("id", "")
         event_type: str = event["type"]
+
+        logger.debug(f"Processing new webhook event: event_id={event_id}")
+
+        # Check if this event was already processed (deduplication)
+        cached_result = await self._check_webhook_dedup(event_id)
+        if cached_result:
+            logger.info(f"Returning cached webhook result: event_id={event_id}")
+            return cached_result
+
         event_data = event["data"]["object"]
 
-        logger.info("Stripe webhook received: type=%s", event_type)
+        logger.info("Stripe webhook received: type=%s event_id=%s", event_type, event_id)
 
+        result = None
         if event_type == "checkout.session.completed":
             await self._handle_checkout_completed(event_data)
+            result = {"processed": True, "event_type": event_type}
         elif event_type == "payment_intent.payment_failed":
             await self._handle_payment_failed(event_data)
+            result = {"processed": True, "event_type": event_type}
         else:
             logger.debug("Unhandled Stripe event type: %s", event_type)
-            return {"processed": False, "event_type": event_type}
+            result = {"processed": False, "event_type": event_type}
 
-        return {"processed": True, "event_type": event_type}
+        # Cache the result for future duplicate events
+        if result:
+            await self._cache_webhook_result(event_id, result)
+
+        return result
 
     async def _handle_checkout_completed(self, session_data: dict) -> None:
         """Mark the order as PAID when checkout.session.completed fires."""
