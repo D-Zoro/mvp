@@ -95,7 +95,7 @@ async def register(
     request: Request,
     payload: RegisterRequest,
     db: DBSession,
-    rate_limit_check: Request = Depends(
+    _rate_limit: None = Depends(
         lambda req: require_rate_limit(req, "signup", 3, 3600)
     ),
 ) -> AuthResponse:
@@ -135,7 +135,7 @@ async def login(
     request: Request,
     payload: LoginRequest,
     db: DBSession,
-    rate_limit_check: Request = Depends(
+    _rate_limit: None = Depends(
         lambda req: require_rate_limit(req, "login", 5, 900)
     ),
 ) -> AuthResponse:
@@ -283,7 +283,7 @@ async def reset_password(
     request: Request,
     payload: PasswordResetConfirm,
     db: DBSession,
-    rate_limit_check: Request = Depends(
+    _rate_limit: None = Depends(
         lambda req: require_rate_limit(req, "password-reset", 3, 3600)
     ),
 ) -> UserResponse:

@@ -12,13 +12,16 @@ Covers:
     GET  /api/v1/auth/me             — authenticated and unauthenticated
     POST /api/v1/auth/verify-email   — invalid token
     POST /api/v1/auth/forgot-password — always 200
+    JWT key versioning               — tokens include key_version claim
 """
 
 import pytest
 from httpx import AsyncClient
+from jose import jwt
 
 from tests.conftest import create_test_user, make_auth_headers
 from app.models.user import UserRole
+from app.core.config import settings
 
 
 BASE = "/api/v1/auth"
@@ -247,6 +250,37 @@ async def test_verify_email_invalid_token(async_client: AsyncClient):
         f"{BASE}/verify-email", json={"token": "invalid.token.here"}
     )
     assert resp.status_code == 400
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JWT Key Versioning (Phase 1 CRIT-03)
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def test_token_includes_key_version(async_client: AsyncClient, db_session):
+    """
+    Verify that tokens created during login include key_version field in payload.
+    This validates Phase 1 CRIT-03 JWT secret rotation implementation.
+    """
+    await create_test_user(
+        db_session, email="keyversion@example.com", password="Pass1234"
+    )
+    await db_session.commit()
+
+    resp = await async_client.post(f"{BASE}/login", json={
+        "email": "keyversion@example.com",
+        "password": "Pass1234",
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    access_token = body["access_token"]
+
+    # Decode token WITHOUT verification to inspect payload
+    unverified_payload = jwt.get_unverified_claims(access_token)
+
+    # Verify key_version field exists and is an integer
+    assert "key_version" in unverified_payload
+    assert isinstance(unverified_payload["key_version"], int)
+    assert unverified_payload["key_version"] >= 1
 
 
 # ─────────────────────────────────────────────────────────────────────────────

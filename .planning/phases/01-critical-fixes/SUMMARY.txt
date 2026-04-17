@@ -1,0 +1,150 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                     PHASE 1: CRITICAL FIXES — RESEARCH                     ║
+║                        Production Blocker Analysis                          ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+RESEARCH STATUS: ✓ COMPLETE
+Created: 2026-04-18
+Requirements: CRIT-01, CRIT-02, CRIT-03, CRIT-04
+
+────────────────────────────────────────────────────────────────────────────
+
+┌─ CRIT-01: ORDER QUANTITY RACE CONDITION ─────────────────────────────────┐
+│                                                                             │
+│ PROBLEM:                                                                    │
+│   Thread A reads Book.quantity = 2 ✓                                      │
+│   Thread B reads Book.quantity = 2 ✓                                      │
+│   Both pass stock check                                                    │
+│   Thread A: quantity = 2 - 2 = 0 ✓                                        │
+│   Thread B: quantity = 0 - 2 = -2 ✗ OVERSELL!                            │
+│                                                                             │
+│ SOLUTION: SELECT ... FOR UPDATE (lock row during transaction)            │
+│                                                                             │
+│ FILES:   backend/app/repositories/order.py                               │
+│          backend/app/services/order_service.py                           │
+│          backend/app/main.py (error handling)                            │
+│                                                                             │
+│ EFFORT:  4-6 hours (dev: 2-3h, test: 1-2h, review: 1h)                  │
+│                                                                             │
+│ TEST:    Load test with 5+ concurrent orders on same book               │
+│          Verify: qty never negative, no oversells                        │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ CRIT-02: STRIPE WEBHOOK DEDUPLICATION ──────────────────────────────────┐
+│                                                                             │
+│ PROBLEM:                                                                    │
+│   Webhook delivered → order marked PAID ✓                                 │
+│   Network error (no ACK to Stripe)                                        │
+│   Stripe retries webhook with same event → marked PAID again             │
+│   Result: Audit confusion, potential double-charge logic bugs            │
+│                                                                             │
+│ SOLUTION: Cache processed event IDs in Redis (24h TTL)                  │
+│                                                                             │
+│ FILES:   backend/app/services/payment_service.py                         │
+│          backend/app/core/rate_limiter.py (Redis helpers)               │
+│          backend/tests/integration/test_payments_api.py                  │
+│                                                                             │
+│ EFFORT:  2.5-3.5 hours (dev: 1-2h, test: 1h, review: 0.5h)              │
+│                                                                             │
+│ TEST:    Send same webhook event twice                                    │
+│          Verify: First processed, second returns cached result           │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ CRIT-03: JWT SECRET ROTATION ───────────────────────────────────────────┐
+│                                                                             │
+│ PROBLEM:                                                                    │
+│   Default SECRET_KEY is public in docs                                   │
+│   No rotation mechanism (change SECRET_KEY → all tokens invalid)         │
+│   On breach, must invalidate all sessions (high churn)                   │
+│                                                                             │
+│ SOLUTION: JWT key versioning (kid claim + 30-day deprecation window)     │
+│   - Add kid header to tokens                                             │
+│   - Accept current + deprecated keys (within 30d TTL)                   │
+│   - Rotate: generate new secret, gradually migrate tokens               │
+│                                                                             │
+│ FILES:   backend/app/core/keys.py (NEW)                                  │
+│          backend/app/core/security.py                                    │
+│          backend/app/core/config.py                                      │
+│          backend/app/core/dependencies.py                                │
+│                                                                             │
+│ EFFORT:  4-6 hours (dev: 2-3h, test: 1-2h, review: 1h)                  │
+│                                                                             │
+│ TEST:    Create token with v1 key                                         │
+│          Rotate to v2, verify v1 still works (within 30d)               │
+│          After 30d, verify v1 rejected                                   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ CRIT-04: RATE LIMITING VALIDATION ──────────────────────────────────────┐
+│                                                                             │
+│ PROBLEM:                                                                    │
+│   Decorator tries to find Request in *args (fragile)                    │
+│   FastAPI depends order not guaranteed → Request might not be in args   │
+│   Silent failure: decorator does nothing (no rate limiting!)            │
+│   Login endpoints unprotected from brute force                          │
+│                                                                             │
+│ SOLUTION: FastAPI Depends() dependency injection                         │
+│   - Guaranteed to receive Request object                                │
+│   - Per-endpoint explicit control                                       │
+│   - Clear error: 429 Too Many Requests with Retry-After                │
+│                                                                             │
+│ FILES:   backend/app/core/dependencies.py                                │
+│          backend/app/api/v1/endpoints/auth.py                           │
+│          backend/tests/integration/test_auth_api.py                     │
+│                                                                             │
+│ EFFORT:  2.5-4.5 hours (dev: 1-2h, test: 1-2h, review: 0.5h)            │
+│                                                                             │
+│ TEST:    Send 6 login requests in 15min → 5 succeed, 6th fails (429)   │
+│          Different IPs have independent limits                          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+────────────────────────────────────────────────────────────────────────────
+
+EXECUTION STRATEGY:
+
+  Recommended Order (based on dependency/risk):
+  
+  1. CRIT-04 (Rate Limiting)      [2.5-4.5h] — Security, independent
+  2. CRIT-01 (Race Condition)     [4-6h]     — Core logic
+  3. CRIT-02 (Webhook Dedup)      [2.5-3.5h] — Financial safeguard
+  4. CRIT-03 (JWT Rotation)       [4-6h]     — Infrastructure
+  
+  TOTAL EFFORT: 13-20 hours (2-3 days for 2 developers)
+  
+  PARALLELIZATION: All 4 are independent
+    Team of 2: CRIT-04+CRIT-03 in parallel, then CRIT-01+CRIT-02
+    Team of 4: All 4 in parallel (2-3h per fix, 3h review shared)
+
+────────────────────────────────────────────────────────────────────────────
+
+SUCCESS CRITERIA (All Must Pass Before Proceeding to Phase 2):
+
+  ✓ CRIT-01: No overselling with 5+ concurrent orders on same book
+  ✓ CRIT-02: Duplicate webhook handled idempotently (state unchanged)
+  ✓ CRIT-03: Key rotation tested, gradual migration working
+  ✓ CRIT-04: Rate limiting enforced (429 response, Retry-After header)
+
+────────────────────────────────────────────────────────────────────────────
+
+KEY QUESTIONS FOR PLANNING SESSION:
+
+  1. Should we parallelize work or do sequentially?
+  2. Do we need to add documentation (runbooks, ADRs)?
+  3. Should Phase 1 include monitoring setup?
+  4. Prefer 30-day or 60-day deprecation window for JWT rotation?
+  5. Rate limit strategy: per-IP or per-user (if authenticated)?
+
+────────────────────────────────────────────────────────────────────────────
+
+DOCUMENTS:
+
+  📄 01-RESEARCH.md    — Full technical analysis (all 4 fixes detailed)
+  📄 README.md         — Quick reference for planning
+  📄 SUMMARY.txt       — This file
+
+NEXT STEP: /gsd-plan-phase 1
+
+────────────────────────────────────────────────────────────────────────────
