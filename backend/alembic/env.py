@@ -88,7 +88,7 @@ def run_migrations_online() -> None:
     cmd_line_url = get_url()
 
     connectable = create_async_engine(cmd_line_url)
-    
+
     async def do_run_migrations():
         async with connectable.connect() as connection:
             # This 'run_sync' is the magic that fixes your error
@@ -104,7 +104,17 @@ def run_migrations_online() -> None:
             context.run_migrations()
 
     # Run the async function
-    asyncio.run(do_run_migrations())
+    try:
+        # Try to get the running loop (will raise RuntimeError if none)
+        loop = asyncio.get_running_loop()
+        # If we get here, there's an event loop running
+        # This happens during pytest runs
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            pool.submit(asyncio.run, do_run_migrations()).result()
+    except RuntimeError:
+        # No running loop, use asyncio.run() directly
+        asyncio.run(do_run_migrations())
 
 if context.is_offline_mode():
     run_migrations_offline()

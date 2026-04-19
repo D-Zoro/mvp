@@ -1,7 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from app.core.dependencies import get_current_active_user
 from app.services.storage import storage_service
-from app.schemas.user import User
+from app.models.user import User
 
 router = APIRouter()
 
@@ -16,7 +16,7 @@ async def upload_file(
     """
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image files are allowed")
-    
+
     try:
         url = await storage_service.upload_file(file, folder="uploads")
         return {"url": url}

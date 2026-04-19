@@ -427,19 +427,66 @@ def generate_email_verification_token(email: str) -> str:
 def verify_email_verification_token(token: str) -> Optional[str]:
     """
     Verify an email verification token.
-    
+
     Args:
         token: Email verification token
-        
+
     Returns:
         Email address if valid, None if invalid
     """
     try:
         payload = decode_token(token)
-        
+
         if payload.get("type") != "email_verification":
             return None
-        
+
         return payload.get("sub")
     except JWTError:
         return None
+
+
+def create_token_with_expiration(
+    user_id: UUID,
+    role: str,
+    token_type: str = "access",
+    expires_delta: int = 0,
+) -> str:
+    """
+    Create a JWT token with custom expiration (for testing).
+
+    Args:
+        user_id: User's UUID
+        role: User's role (buyer, seller, admin)
+        token_type: Token type (access or refresh)
+        expires_delta: Expiration delta in seconds (can be negative for expired tokens)
+
+    Returns:
+        str: Encoded JWT token
+
+    Example:
+        >>> # Create token that expires 1 hour from now
+        >>> token = create_token_with_expiration(user_id, "buyer", expires_delta=3600)
+        >>> # Create token that expired 1 hour ago
+        >>> expired_token = create_token_with_expiration(user_id, "buyer", expires_delta=-3600)
+    """
+    from app.core.keys import get_active_key
+
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(seconds=expires_delta)
+
+    key_version, secret = get_active_key()
+
+    payload = {
+        "sub": str(user_id),
+        "role": role,
+        "type": token_type,
+        "key_version": key_version,
+        "exp": expire,
+        "iat": now,
+    }
+
+    return jwt.encode(
+        payload,
+        secret,
+        algorithm=settings.JWT_ALGORITHM,
+    )

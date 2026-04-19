@@ -15,7 +15,7 @@ class StorageService:
             region_name=os.getenv('AWS_REGION', 'us-east-1')
         )
         self.bucket_name = os.getenv('AWS_BUCKET_NAME', 'books4all-uploads')
-        self._ensure_bucket_exists()
+        self._bucket_initialized = False
 
     def _ensure_bucket_exists(self):
         try:
@@ -48,10 +48,15 @@ class StorageService:
         """
         Upload a file to S3/MinIO and return the public URL.
         """
+        # Ensure bucket exists on first use
+        if not self._bucket_initialized:
+            self._ensure_bucket_exists()
+            self._bucket_initialized = True
+
         # Generate unique filename
         ext = os.path.splitext(file.filename)[1]
         filename = f"{folder}/{datetime.now().strftime('%Y/%m')}/{uuid.uuid4()}{ext}"
-        
+
         try:
             # Upload file
             self.s3_client.upload_fileobj(
@@ -60,13 +65,13 @@ class StorageService:
                 filename,
                 ExtraArgs={'ContentType': file.content_type}
             )
-            
+
             # Construct URL
             # In production, this would be the CloudFront/S3 URL
             # In dev, it's the MinIO URL accessible from the browser
             base_url = os.getenv('PUBLIC_STORAGE_URL', 'http://localhost:9000')
             return f"{base_url}/{self.bucket_name}/{filename}"
-            
+
         except ClientError as e:
             print(f"Error uploading file: {e}")
             raise e
