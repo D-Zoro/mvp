@@ -1,251 +1,642 @@
-# Books4All MVP Roadmap
+# Books4All Roadmap: Security & Technical Debt Remediation
 
-**Created:** 2026-04-18  
-**Milestone:** Production MVP Release  
-**Phases:** 7  
-**Requirements:** 45 total v1 requirements  
-**Coverage:** 100% (45/45 mapped)
+**Timeline:** 1-2 weeks | **Team:** Solo | **Status:** Planning Phase
 
 ---
 
-## Phase Overview
+## 🗺️ Roadmap Overview
 
-| # | Phase | Goal | Requirements | Success Criteria |
-|---|-------|------|--------------|------------------|
-| 1 | Critical Fixes | Eliminate 4 production blockers | CRIT-01 to CRIT-04 | 4 |
-| 2 | Backend Services | 2/1 | Complete    | 2026-04-17 |
-| 3 | Backend Foundations | Fix repos, async patterns, error handling | REPO-01 to REPO-05, ASYNC-01 to ASYNC-04, ERROR-01 to ERROR-04 | 13 |
-| 4 | Frontend Components | Fix React components and API integration | COMP-01 to COMP-04, API-01 to API-04 | 8 |
-| 5 | User Workflows | Test buyer, seller, and admin journeys | FLOW-01 to FLOW-04 | 4 |
-| 6 | Integration & Quality | Full end-to-end testing and validation | INT-01 to INT-05, TEST-01 to TEST-04 | 9 |
-| 7 | Deploy Ready | Prepare for production deployment | DEPLOY-01 to DEPLOY-04 | 4 |
+This roadmap breaks down the security and technical debt remediation into **5 executable phases**, each with clear goals, deliverables, and success criteria.
 
----
+```
+PHASE 1: Security Hardening (Days 1-5)
+├─ Secrets Management & Environment Variables
+├─ JWT Security (HTTP-only Cookies)
+├─ OAuth State Validation
+├─ Rate Limiting Implementation
+└─ CORS Configuration
 
-## Phase Details
+PHASE 2: Performance Optimization (Days 1-4)
+├─ N+1 Query Resolution
+├─ Caching Strategy Implementation
+├─ Database Optimization
+└─ Performance Testing & Validation
 
-### Phase 1: Critical Fixes
+PHASE 3: Code Quality & Testing (Days 1-3)
+├─ Test Coverage Improvement (to 80%+)
+├─ Security-Specific Tests
+├─ Integration Tests
+└─ CI/CD Verification
 
-**Goal:** Eliminate 4 production blockers (race conditions, webhooks, JWT, rate limiting) before any other work.
+PHASE 4: Technical Debt Cleanup (Days 1-2)
+├─ Logging Standards
+├─ Error Handling Consistency
+├─ Code Documentation
+└─ README & Setup Instructions
 
-**Requirements:**
-- CRIT-01: Fix order quantity race condition
-- CRIT-02: Fix Stripe webhook deduplication
-- CRIT-03: Implement JWT secret rotation
-- CRIT-04: Validate rate limiting
+PHASE 5: Final Validation & Deployment (Days 1-2)
+├─ End-to-End Testing
+├─ Performance Benchmarking
+├─ Security Audit
+└─ Deployment Readiness
 
-**Success Criteria:**
-1. Order quantity race condition fixed — concurrent purchases on same book don't oversell
-2. Stripe webhooks are deduplicated — no double-charging on network retries
-3. JWT secret rotation mechanism implemented and tested
-4. Rate limiting enforced on all auth endpoints (/login, /signup, /reset-password)
-5. All 4 critical issues verified fixed in integration tests
-
-**Dependencies:** None (goes first)
-
-**Depends on:** None
-
----
-
-### Phase 2: Backend Service Layer
-
-**Goal:** Audit and fix all service layer business logic (auth, books, orders, payments).
-
-**Requirements:**
-- SVCL-01: Audit UserService (login, signup, password reset, RBAC)
-- SVCL-02: Audit BookService (list, filter, search, image handling)
-- SVCL-03: Audit OrderService (create, state transitions, validation)
-- SVCL-04: Audit PaymentService (Stripe, webhooks, refunds)
-- SVCL-05: Ensure proper exception handling with typed exceptions
-
-**Success Criteria:**
-1. UserService logic audited and verified — all auth flows work correctly
-2. BookService logic verified — list/filter/search correct, image handling solid
-3. OrderService logic fixed — state machine transitions only valid paths
-4. PaymentService verified — Stripe integration idempotent and correct
-5. All services raise and handle typed exceptions properly — no generic errors
-
-**Dependencies:** Phase 1 (critical fixes must be done first)
-
-**Depends on:** Phase 1
+Total: ~14 working days = 2 weeks
+```
 
 ---
 
-### Phase 3: Backend Foundations
+## 📍 PHASE 1: Security Hardening
 
-**Goal:** Fix repository layer, async patterns, and error handling throughout backend.
+**Duration:** 5 days
+**Owner:** Solo Developer (You)
+**Goal:** Fix all critical and high-priority security vulnerabilities.
 
-**Requirements:**
-- REPO-01: Audit UserRepository queries
-- REPO-02: Audit BookRepository soft deletes and orphaned references
-- REPO-03: Audit OrderRepository state consistency
-- REPO-04: Audit PaymentRepository transaction integrity
-- REPO-05: Validate async/await patterns (no blocking)
-- ASYNC-01: Validate SQLAlchemy 2.0 async patterns
-- ASYNC-02: Ensure session lifecycle is correct (no leaks)
-- ASYNC-03: Validate transaction boundaries for orders/payments
-- ASYNC-04: Test connection pooling and concurrency
-- ERROR-01: Validate all 14 typed exceptions correct
-- ERROR-02: Ensure error responses don't leak information
-- ERROR-03: Verify all endpoints return proper HTTP status codes
-- ERROR-04: Test error handling with invalid inputs
+### Phase 1.1: Secrets Management (Days 1-2)
 
-**Success Criteria:**
-1. All repositories audited — queries correct, constraints enforced
-2. No async/await issues found — all sessions properly managed
-3. Transaction boundaries correct for critical operations (orders, payments)
-4. Connection pooling validated — handles concurrent load
-5. Error handling comprehensive — all edges cases tested
+**Objective:** Ensure no hardcoded secrets in codebase.
 
-**Dependencies:** Phase 2 (service layer must be correct first)
+**Tasks:**
+1. Audit config files and source code for hardcoded secrets
+2. Create/update `config.py` with Settings class reading from environment
+3. Update `.env.example` with placeholder values (no real secrets)
+4. Configure all services (DB, Redis, Stripe, OAuth) via environment variables
+5. Add git hooks to prevent secret commits: `git secrets install`
+6. Update deployment docs with required environment variables
 
-**Depends on:** Phase 2
+**Deliverables:**
+- [ ] No hardcoded secrets found in code scan
+- [ ] `.env.example` updated with placeholders
+- [ ] `config.py` uses `os.getenv()` with validation
+- [ ] Git hooks installed and working
+- [ ] Documentation: `docs/SECURITY.md` lists all required env vars
 
----
+**Tests:**
+- Unit tests verify config reads from environment
+- Linting rules prevent hardcoded credentials
 
-### Phase 4: Frontend Components & API
-
-**Goal:** Fix React components, validate API integration, ensure TypeScript strictness.
-
-**Requirements:**
-- COMP-01: Fix all component rendering logic
-- COMP-02: Audit form validation and error display
-- COMP-03: Audit layout components (responsiveness, accessibility)
-- COMP-04: Fix TypeScript types (strict mode)
-- API-01: Validate API client calls match backend
-- API-02: Fix error handling for failed requests
-- API-03: Ensure auth tokens handled correctly
-- API-04: Test network timeout and offline scenarios
-
-**Success Criteria:**
-1. All React components render correctly — no state/prop issues
-2. Forms validate correctly and display errors properly
-3. Layouts responsive and accessible across devices
-4. TypeScript strict mode passes — no `any` types in public APIs
-5. API integration complete — all client calls match backend, error handling solid
-
-**Dependencies:** Phase 3 (backend must be correct so frontend can rely on it)
-
-**Depends on:** Phase 3
+**Acceptance Criteria:**
+- ✅ `pytest tests/test_config.py` passes
+- ✅ `git secrets scan` finds no issues
+- ✅ All env vars documented
 
 ---
 
-### Phase 5: User Workflows
+### Phase 1.2: JWT Security (Days 2-3)
 
-**Goal:** Test and validate complete buyer, seller, and admin user journeys end-to-end.
+**Objective:** Move JWT to HTTP-only cookies, implement refresh token rotation.
 
-**Requirements:**
-- FLOW-01: Test buyer signup → login → browse → cart → checkout
-- FLOW-02: Test buyer order history and tracking
-- FLOW-03: Test seller listing creation → order fulfillment
-- FLOW-04: Test admin user and content management
+**Tasks:**
+1. Modify `app/core/security.py` to create HTTP-only cookies
+2. Update auth endpoints to set cookies instead of returning tokens
+3. Add CSRF token mechanism for POST/PUT/DELETE requests
+4. Remove localStorage token code from frontend
+5. Implement refresh token rotation (new token on each refresh)
+6. Add logout endpoint that clears cookies
+7. Test with Postman/curl to verify cookies are HTTP-only
 
-**Success Criteria:**
-1. Buyer workflow end-to-end: signup to checkout works smoothly
-2. Buyer can view order history and track status
-3. Seller can list books and fulfill orders correctly
-4. Admin can manage users and moderate content
-5. All workflows pass manual testing with real data
+**Deliverables:**
+- [ ] Auth endpoints set HTTP-only, Secure cookies
+- [ ] Access token: 15 min expiry, Refresh token: 7 days
+- [ ] CSRF token implemented for state-changing operations
+- [ ] Frontend uses cookie-based auth
+- [ ] Logout endpoint clears all auth cookies
 
-**Dependencies:** Phase 4 (frontend/API must be correct)
+**Tests:**
+- Auth tests verify cookies have `httpOnly=True`
+- Integration tests confirm no localStorage token
+- Tests for refresh token rotation and expiry
+- CSRF tests verify token validation
 
-**Depends on:** Phase 4
-
----
-
-### Phase 6: Integration & Quality
-
-**Goal:** Full end-to-end testing, concurrency validation, and comprehensive quality gates.
-
-**Requirements:**
-- INT-01: Full order flow (create → payment → confirmation → delivery)
-- INT-02: Payment failure scenarios (declined, timeout, retry)
-- INT-03: Seller fulfillment workflows
-- INT-04: Data integrity (no orphaned records, constraints)
-- INT-05: Concurrency testing (simultaneous orders, rate limiting)
-- TEST-01: Unit test suite with 75%+ coverage
-- TEST-02: Database tests with real PostgreSQL
-- TEST-03: Integration tests with AsyncClient
-- TEST-04: Manual end-to-end testing
-
-**Success Criteria:**
-1. Complete order flow verified end-to-end — from creation to delivery
-2. Payment failures handled gracefully — retries work, no lost orders
-3. Seller fulfillment accurate — orders marked shipped/delivered correctly
-4. Data integrity perfect — no orphaned records, all constraints enforced
-5. System handles concurrent load — rate limiting prevents abuse
-6. Test coverage at 75%+ — all critical paths covered
-7. All integration tests pass with real database
-8. Manual testing confirms system ready for release
-
-**Dependencies:** Phase 5 (workflows verified first)
-
-**Depends on:** Phase 5
+**Acceptance Criteria:**
+- ✅ `curl -v http://localhost:8000/api/v1/auth/login` shows `Set-Cookie: access_token=...`
+- ✅ Frontend localStorage.getItem('token') returns null
+- ✅ Auth tests pass with 90%+ coverage
 
 ---
 
-### Phase 7: Deploy Ready
+### Phase 1.3: OAuth State Validation (Days 3-4)
 
-**Goal:** Prepare all infrastructure, config, and dependencies for production deployment.
+**Objective:** Implement proper OAuth state validation to prevent CSRF attacks.
 
-**Requirements:**
-- DEPLOY-01: Database migrations tested and verified
-- DEPLOY-02: Environment variables configured correctly
-- DEPLOY-03: Docker Compose works for dev/staging/prod
-- DEPLOY-04: All dependencies pinned (bcrypt 4.1.2, etc.)
+**Tasks:**
+1. Generate random state in OAuth initiation endpoint
+2. Store state in Redis with 10-minute TTL
+3. Validate state on OAuth callback
+4. Clear state after successful validation
+5. Return 400 Bad Request for invalid/missing state
+6. Add logging for OAuth events
+7. Test OAuth flow end-to-end with test credentials
 
-**Success Criteria:**
-1. All database migrations run correctly — schema matches code
-2. Environment variables configured for dev/staging/prod
-3. Docker Compose builds and runs all services
-4. All dependencies pinned to specific versions
-5. System can be deployed to production with confidence
+**Deliverables:**
+- [ ] OAuth state generation in `auth_service.py`
+- [ ] State validation in callback endpoint
+- [ ] Redis storage for state tracking
+- [ ] Proper error handling for invalid state
 
-**Dependencies:** Phase 6 (all code must be tested first)
+**Tests:**
+- Unit tests for state generation
+- Integration tests with invalid state (should fail)
+- Integration tests with valid state (should succeed)
+- Tests verify state is cleared after use
 
-**Depends on:** Phase 6
-
----
-
-## Requirement Coverage
-
-**Total v1 Requirements:** 45  
-**Phases Created:** 7  
-**Requirements Mapped:** 45  
-**Unmapped:** 0 ✓
-
-### By Category
-
-| Category | Count | Phases |
-|----------|-------|--------|
-| Critical Fixes | 4 | Phase 1 |
-| Backend Services | 5 | Phase 2 |
-| Backend Repos & Async | 13 | Phase 3 |
-| Frontend | 8 | Phase 4 |
-| Workflows | 4 | Phase 5 |
-| Integration & Quality | 9 | Phase 6 |
-| Deployment | 4 | Phase 7 |
+**Acceptance Criteria:**
+- ✅ OAuth callback with invalid state returns 400
+- ✅ OAuth callback with valid state succeeds
+- ✅ All OAuth tests pass
 
 ---
 
-## Key Decisions
+### Phase 1.4: Rate Limiting (Days 4-5)
 
-1. **Phase 1 First** — Critical blockers prevent production, must be fixed before anything else
-2. **Logical Dependency Order** — Backend → Frontend → Integration (can't test frontend without working backend)
-3. **Quality-First Approach** — Each phase verifies thoroughly before moving to next
-4. **Parallel When Possible** — Services in Phase 2 can be audited in parallel
-5. **Integration Last** — After all components work individually, verify they work together
+**Objective:** Implement rate limiting on all public endpoints.
+
+**Tasks:**
+1. Install and configure `slowapi` (FastAPI rate limiter)
+2. Configure Redis as rate limit backend
+3. Define rate limit policies:
+   - Auth endpoints: 5 req/min per IP
+   - Authenticated endpoints: 100 req/min per user
+   - Public endpoints: 30 req/min per IP
+4. Apply rate limiters to all endpoints
+5. Test rate limit headers and responses
+6. Document rate limits in API docs
+
+**Deliverables:**
+- [ ] Rate limiting middleware configured
+- [ ] All endpoints protected with appropriate limits
+- [ ] 429 Too Many Requests response on limit exceeded
+- [ ] Rate limit headers in responses (X-RateLimit-*)
+
+**Tests:**
+- Test hitting rate limit and getting 429
+- Test rate limit reset behavior
+- Test different limits for different endpoints
+- Performance test (limit enforcement overhead)
+
+**Acceptance Criteria:**
+- ✅ Auth endpoint returns 429 after 5 requests/min
+- ✅ API endpoint returns 429 after 100 requests/min (authenticated)
+- ✅ Rate limit headers present in response
 
 ---
 
-## Next Steps
+### Phase 1.5: CORS Configuration (Days 5)
 
-1. **Phase 1 Planning** — Gather details on critical fixes needed
-2. **Execute Phase 1** — Fix all 4 blockers
-3. **Continue Sequential** — Each phase depends on previous
+**Objective:** Implement proper CORS configuration.
+
+**Tasks:**
+1. Remove wildcard CORS if present
+2. Configure allowed origins (dev and prod)
+3. Set credentials=true for cookie-based auth
+4. Restrict HTTP methods and headers
+5. Set preflight cache (600 seconds)
+6. Test CORS with curl and browser
+
+**Deliverables:**
+- [ ] CORS middleware configured in `app/main.py`
+- [ ] Allowed origins list in config
+- [ ] Proper headers and methods allowed
+
+**Tests:**
+- Preflight request tests (OPTIONS)
+- CORS header validation
+- Rejected origin tests (wildcard should fail)
+
+**Acceptance Criteria:**
+- ✅ Preflight request returns correct headers
+- ✅ Wildcard origin request is rejected
+- ✅ Same-origin request succeeds
 
 ---
 
-*Roadmap created: 2026-04-18*
-*All 45 requirements mapped to 7 phases*
-*Ready for execution*
+## 📍 PHASE 2: Performance Optimization
+
+**Duration:** 4 days
+**Owner:** Solo Developer (You)
+**Goal:** Eliminate N+1 queries, implement caching, optimize database.
+
+### Phase 2.1: N+1 Query Resolution (Days 1-2)
+
+**Objective:** Fix N+1 query patterns in critical paths.
+
+**Tasks:**
+1. Identify N+1 patterns using SQLAlchemy query logging
+2. Refactor book listing queries to use `joinedload` or `selectinload`
+3. Refactor order queries to load related data efficiently
+4. Add query count assertions in tests
+5. Benchmark before/after query performance
+6. Document query optimization patterns
+
+**Deliverables:**
+- [ ] Book queries optimized (1 query instead of 1+N)
+- [ ] Order queries optimized
+- [ ] Search endpoint optimized
+- [ ] Query count tests added
+
+**Tests:**
+- Query logger tests verify reduced queries
+- Performance benchmarks show improvement
+- Integration tests verify correct data returned
+
+**Acceptance Criteria:**
+- ✅ Book listing query count: 1 (was 1+N)
+- ✅ Order query count: 1-2 (was 1+N)
+- ✅ Performance improvement >50%
+
+---
+
+### Phase 2.2: Caching Strategy (Days 2-3)
+
+**Objective:** Implement Redis caching for hot reads.
+
+**Tasks:**
+1. Design cache key strategy
+2. Implement cache decorator for service methods
+3. Cache book listings (5-min TTL)
+4. Cache category listings (10-min TTL)
+5. Implement cache invalidation on data changes
+6. Add HTTP ETag/Last-Modified headers
+7. Monitor cache hit rate
+
+**Deliverables:**
+- [ ] Cache service utility in `app/core/cache.py`
+- [ ] Cache decorators on hot reads
+- [ ] Cache invalidation on updates
+- [ ] HTTP cache headers implemented
+
+**Tests:**
+- Cache hit/miss tests
+- Cache expiry tests
+- Invalidation tests (cache cleared on updates)
+- HTTP cache header tests
+- Performance tests (cache vs no-cache)
+
+**Acceptance Criteria:**
+- ✅ Cache hit ratio: >60% for GET requests
+- ✅ Cache TTL properly respected
+- ✅ Cache invalidated on updates
+- ✅ HTTP cache headers present
+
+---
+
+### Phase 2.3: Database Optimization (Days 3-4)
+
+**Objective:** Optimize database configuration and queries.
+
+**Tasks:**
+1. Review and optimize connection pool settings
+2. Create Alembic migration for missing indexes
+3. Add indexes on frequently queried columns:
+   - `users.email` (auth)
+   - `books.user_id` (seller books)
+   - `orders.user_id` (order history)
+   - `orders.created_at` (recent orders)
+4. Analyze slow queries and optimize
+5. Test with realistic data volumes
+6. Document performance metrics
+
+**Deliverables:**
+- [ ] Connection pool optimized (20 max, 30s idle timeout)
+- [ ] Indexes created in migration
+- [ ] Slow queries identified and optimized
+- [ ] Performance metrics documented
+
+**Tests:**
+- Integration tests with >1000 records
+- Query performance benchmarks
+- Connection pool stress tests
+
+**Acceptance Criteria:**
+- ✅ Query response time: <200ms avg
+- ✅ No full table scans in slow query log
+- ✅ Indexes used in query plans
+
+---
+
+## 📍 PHASE 3: Code Quality & Testing
+
+**Duration:** 3 days
+**Owner:** Solo Developer (You)
+**Goal:** Achieve 80%+ test coverage with focus on critical paths.
+
+### Phase 3.1: Unit Test Coverage (Days 1-2)
+
+**Objective:** Write unit tests for all service and security-critical code.
+
+**Tasks:**
+1. Audit current test coverage with `pytest --cov`
+2. Write unit tests for:
+   - Auth service (login, register, OAuth, token refresh)
+   - Security functions (password hashing, JWT generation)
+   - Validation schemas (Pydantic)
+   - Exception handling
+3. Write security tests:
+   - Rate limit enforcement
+   - CORS headers
+   - Input validation
+4. Achieve 80%+ overall coverage, 90%+ for critical paths
+
+**Deliverables:**
+- [ ] Unit test coverage: 80%+
+- [ ] Critical path coverage: 90%+
+- [ ] Security tests passing
+- [ ] Coverage report generated
+
+**Tests:**
+- `pytest --cov tests/` shows 80%+
+- `pytest tests/test_security.py` shows all security tests pass
+
+**Acceptance Criteria:**
+- ✅ `pytest --cov` shows 80%+ coverage
+- ✅ All critical functions have unit tests
+- ✅ Zero coverage regressions
+
+---
+
+### Phase 3.2: Integration & End-to-End Tests (Days 2-3)
+
+**Objective:** Write integration tests for complete user flows.
+
+**Tasks:**
+1. Write integration tests for:
+   - User registration and login
+   - OAuth flows (with test credentials)
+   - Book listing and search
+   - Order creation and payment
+   - Review submission
+2. Set up test database (isolated from dev/prod)
+3. Mock external services (Stripe, OAuth providers)
+4. Test error scenarios and edge cases
+
+**Deliverables:**
+- [ ] Integration tests for all major flows
+- [ ] Test database setup
+- [ ] External service mocks
+- [ ] All tests passing
+
+**Tests:**
+- `pytest tests/integration/` passes
+- Test coverage includes happy paths and error paths
+
+**Acceptance Criteria:**
+- ✅ All major user flows tested
+- ✅ Tests pass with mocked external services
+- ✅ Error handling tests included
+
+---
+
+## 📍 PHASE 4: Technical Debt Cleanup
+
+**Duration:** 2 days
+**Owner:** Solo Developer (You)
+**Goal:** Clean up logging, error handling, and documentation.
+
+### Phase 4.1: Logging Standards (Day 1)
+
+**Objective:** Replace print statements with proper logging.
+
+**Tasks:**
+1. Replace all `print()` statements with `logger.info()`, `logger.error()`, etc.
+2. Configure logging level (DEBUG in dev, WARNING in prod)
+3. Ensure sensitive data (passwords, tokens) never logged
+4. Add linting rule to prevent future print statements
+
+**Deliverables:**
+- [ ] No print statements in codebase
+- [ ] Logging configured with levels
+- [ ] Linting rule prevents print statements
+
+**Tests:**
+- Linting: `flake8` checks no print statements
+
+**Acceptance Criteria:**
+- ✅ `grep -r "print(" app/` returns nothing
+- ✅ `flake8 app/` passes
+
+---
+
+### Phase 4.2: Error Handling & Documentation (Day 2)
+
+**Objective:** Consistent error handling and code documentation.
+
+**Tasks:**
+1. Review and standardize error response format
+2. Ensure all functions have docstrings (Google format)
+3. Update README with:
+   - Setup instructions
+   - Running the app
+   - Testing
+   - Deployment
+4. Document API endpoints (or verify FastAPI auto-docs)
+
+**Deliverables:**
+- [ ] All functions have docstrings
+- [ ] Error response format consistent
+- [ ] README comprehensive
+- [ ] API documentation accessible
+
+**Tests:**
+- Docstring check: `pydocstyle app/`
+- Documentation review (manual)
+
+**Acceptance Criteria:**
+- ✅ `pydocstyle app/` shows no missing docstrings
+- ✅ README covers setup, testing, deployment
+- ✅ API docs accessible at `/docs`
+
+---
+
+## 📍 PHASE 5: Final Validation & Deployment
+
+**Duration:** 2 days
+**Owner:** Solo Developer (You)
+**Goal:** Ensure all changes are tested, documented, and ready for deployment.
+
+### Phase 5.1: End-to-End Testing (Day 1)
+
+**Objective:** Run complete test suite and validate all requirements met.
+
+**Tasks:**
+1. Run full test suite: `pytest tests/`
+2. Verify coverage: `pytest --cov` shows 80%+
+3. Run security scanner (e.g., `bandit app/`)
+4. Test all security requirements:
+   - Secrets not exposed
+   - Rate limiting works
+   - CORS configured
+   - OAuth state validated
+   - Input validation complete
+5. Test performance improvements:
+   - Query count reduced
+   - Cache hit rate >60%
+   - Response times <200ms avg
+6. Manual testing:
+   - User signup and login
+   - Book listing and search
+   - Order creation
+   - Payment processing (test mode)
+
+**Deliverables:**
+- [ ] All tests passing
+- [ ] Coverage report: 80%+
+- [ ] Security scan: no high-severity issues
+- [ ] Performance metrics documented
+- [ ] Manual testing checklist completed
+
+**Tests:**
+- `pytest tests/ --tb=short` passes
+- `pytest --cov` shows 80%+
+- `bandit -r app/` shows no critical issues
+
+**Acceptance Criteria:**
+- ✅ All tests pass
+- ✅ Coverage 80%+
+- ✅ No critical security issues
+- ✅ Performance metrics show improvement
+
+---
+
+### Phase 5.2: Deployment Readiness (Day 2)
+
+**Objective:** Prepare for production deployment.
+
+**Tasks:**
+1. Review all commits for quality
+2. Create deployment checklist:
+   - Database migrations tested
+   - Env vars documented
+   - Build passes
+   - Tests pass
+   - Security scan passes
+3. Update CHANGELOG with all changes
+4. Tag release: `git tag -a v1.0.0-security -m "Security hardening release"`
+5. Create deployment runbook
+
+**Deliverables:**
+- [ ] CHANGELOG updated
+- [ ] Release tagged
+- [ ] Deployment runbook created
+- [ ] All requirements met
+
+**Documentation:**
+- CHANGELOG.md
+- DEPLOYMENT.md
+- SECURITY.md (new)
+
+**Acceptance Criteria:**
+- ✅ CHANGELOG documents all changes
+- ✅ Release tagged in git
+- ✅ Deployment runbook created
+- ✅ Ready for production deployment
+
+---
+
+## 📊 Success Metrics
+
+### Security Metrics
+- ✅ 0 hardcoded secrets
+- ✅ JWT in HTTP-only cookies
+- ✅ OAuth state validated
+- ✅ Rate limiting enforced on all endpoints
+- ✅ CORS properly configured
+- ✅ All input validation in place
+
+### Performance Metrics
+- ✅ N+1 queries eliminated (1 query per endpoint)
+- ✅ Cache hit rate >60%
+- ✅ Response time <200ms avg
+- ✅ Database connection pool optimized
+
+### Quality Metrics
+- ✅ Test coverage 80%+
+- ✅ Critical path coverage 90%+
+- ✅ All tests passing
+- ✅ Zero linting errors
+- ✅ Security scan: no high-severity issues
+
+### Process Metrics
+- ✅ Timeline: 1-2 weeks (14 days)
+- ✅ All requirements met
+- ✅ All acceptance criteria satisfied
+- ✅ Code reviewed and documented
+- ✅ Deployment ready
+
+---
+
+## 📅 Execution Calendar
+
+```
+WEEK 1 (Days 1-5)
+├─ Day 1-2: Phase 1.1 (Secrets Management)
+├─ Day 2-3: Phase 1.2 (JWT Security)
+├─ Day 3-4: Phase 1.3 (OAuth State)
+├─ Day 4-5: Phase 1.4 (Rate Limiting)
+└─ Day 5: Phase 1.5 (CORS)
+
+WEEK 2 (Days 1-4)
+├─ Day 1-2: Phase 2.1 (N+1 Queries)
+├─ Day 2-3: Phase 2.2 (Caching)
+├─ Day 3-4: Phase 2.3 (Database)
+└─ Day 5: Phase 3.1 (Testing)
+
+WEEK 2 (Days 1-2) [continued]
+├─ Day 1: Phase 3.2 (Integration Tests)
+├─ Day 2: Phase 4 (Technical Debt)
+└─ Day 3-4: Phase 5 (Validation & Deployment)
+```
+
+---
+
+## 🔄 Phase Progression
+
+**How to Use This Roadmap:**
+
+1. **Review** — Read through the phases and understand the flow
+2. **Plan** — Run `/gsd-plan-phase 1` to create detailed tasks for Phase 1
+3. **Execute** — Follow the tasks, commit changes, run tests
+4. **Validate** — Check acceptance criteria before moving to next phase
+5. **Progress** — Run `/gsd-plan-phase 2` after Phase 1 completion
+
+**Commands:**
+```bash
+/gsd-plan-phase 1        # Plan Phase 1: Security Hardening
+/gsd-plan-phase 2        # Plan Phase 2: Performance
+/gsd-plan-phase 3        # Plan Phase 3: Testing
+# ... etc
+```
+
+---
+
+## ⚠️ Risks & Mitigations
+
+| Risk | Impact | Mitigation |
+|------|--------|-----------|
+| Breaking API changes | High | Comprehensive testing before deployment |
+| Database migration failures | High | Test migrations in dev, backup before prod |
+| Performance regression | Medium | Benchmark before/after changes |
+| Security oversight | High | Security review and scan before deployment |
+| Incomplete coverage | Medium | Focus on critical paths first (90%+) |
+
+---
+
+## 📞 Next Steps
+
+1. **Review this roadmap** — Understand the phase breakdown
+2. **Run Phase 1 plan** — `/gsd-plan-phase 1`
+3. **Execute Phase 1 tasks** — Follow the detailed tasks
+4. **Complete Phase 1** — All acceptance criteria met
+5. **Move to Phase 2** — `/gsd-plan-phase 2`
+6. **Repeat** — Until all 5 phases complete
+
+**Estimated Time to Completion:** 2 weeks with solo developer
+**Go/No-Go Decision:** After Phase 1 (Day 5)
+
+---
+
+## 📋 Related Documents
+
+- **PROJECT.md** — Project charter and context
+- **REQUIREMENTS.md** — Detailed acceptance criteria
+- **STACK.md** — Technology details
+- **ARCHITECTURE.md** — System design
+- **CONCERNS.md** — Issues being addressed
