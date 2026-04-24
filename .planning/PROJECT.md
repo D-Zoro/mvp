@@ -1,144 +1,91 @@
-# Books4All Project Charter
+# Books4All — Project Context
 
-**Project:** Books4All - Peer-to-Peer Used Book Marketplace
-**Status:** Active Development (Security & Stability Focus)
-**Last Updated:** 2026-04-24
+**Status:** GSD Initialization (Security & Quality Audit)  
+**Started:** 2026-04-24  
+**Lead:** Project Lead / Architect  
+**Phase:** Requirements & Planning
 
----
+## Overview
 
-## 📋 Project Overview
+Books4All is a peer-to-peer book marketplace platform with a FastAPI backend and Next.js/React frontend. This project is being initialized with GSD to address critical security and quality concerns identified in the codebase audit.
 
-**Books4All** is a full-stack web application for buying and selling used books between peers. The platform facilitates peer-to-peer transactions with integrated payment processing, user authentication, and book discovery features.
+**Current State:**
+- ✅ Fully functional backend (FastAPI + PostgreSQL + Redis)
+- ✅ Functional frontend (Next.js + React + TypeScript)
+- ✅ 1,497-node knowledge graph built
+- ⚠️ 7 critical security issues identified
+- ⚠️ Multiple performance and scalability concerns
+- ⚠️ Technical debt across codebase
 
-### Current Tech Stack
+## Project Goal
 
-**Frontend:**
-- Next.js 16 + React 19 + TypeScript
-- Zustand for state management
-- TailwindCSS for styling
-
-**Backend:**
-- FastAPI (Python 3.12+)
-- PostgreSQL 16+ (database)
-- Redis 7+ (caching, rate limiting)
-- SQLAlchemy ORM + Alembic (migrations)
-
-**External Services:**
-- Stripe (payments)
-- Google OAuth & GitHub OAuth (authentication)
-- S3/MinIO (image storage)
-
----
-
-## 🎯 Current Initiative: Security & Technical Debt Remediation
-
-### Objective
-Address critical security vulnerabilities, performance bottlenecks, and technical debt identified in the initial codebase audit. Target completion in **1-2 weeks** with solo development.
-
-### Priority Issues (from CONCERNS.md)
-
-**🔴 CRITICAL SECURITY (Must fix)**
-1. Hardcoded secrets and API keys in configuration
-2. JWT stored in localStorage (vulnerable to XSS)
-3. OAuth state parameter not validated
-4. Rate limiting not implemented
-5. CORS configuration overpermissive
-
-**🟠 HIGH PRIORITY (Should fix)**
-1. N+1 query problems in book listings
-2. No application-level caching strategy
-3. Session fixation vulnerabilities
-4. Stock race conditions (concurrent orders)
-
-**🟡 MEDIUM PRIORITY (Will fix)**
-1. Email verification workflow incomplete
-2. Database connection pooling limits
-3. Print statements instead of logging
-4. Missing input validation on several endpoints
-5. Password reset tokens reusable (should be one-time use)
+**Audit and remediate critical security vulnerabilities, performance issues, and technical debt while maintaining platform functionality.**
 
 ### Success Criteria
+1. All 7 critical security issues resolved
+2. Performance baseline established and improved
+3. Technical debt documented and prioritized
+4. Code quality metrics meet standards (80%+ coverage)
+5. Architecture validated against DDD principles
 
-- ✅ No hardcoded secrets in code
-- ✅ JWT moved to secure HTTP-only cookies
-- ✅ OAuth state validation implemented
-- ✅ Rate limiting on all public endpoints
-- ✅ N+1 queries resolved (critical paths)
-- ✅ Caching strategy implemented for hot reads
-- ✅ Stock race condition fixed with transactions
-- ✅ All tests passing (80%+ coverage)
+## Key Findings from Codebase Map
 
----
+### Critical Concerns (CONCERNS.md)
+- Hardcoded secrets and insecure token storage
+- OAuth state validation gaps
+- N+1 database query patterns
+- No application-level caching
+- Stock race conditions
+- Session fixation vulnerabilities
+- Missing input validation
 
-## 📊 Key Metrics
+### Architecture (ARCHITECTURE.md)
+- Monolithic FastAPI backend with repository pattern
+- Layered architecture: API → Services → Repositories → Models
+- React frontend with Zustand state management
+- Separate deployment of frontend/backend
 
-| Metric | Current | Target | Status |
-|--------|---------|--------|--------|
-| Security Issues | 9 | 0 | 🔴 In Progress |
-| N+1 Query Instances | 5+ | 0 | 🔴 To Start |
-| Test Coverage | 65% | 80%+ | 🟡 Partial |
-| Response Times (avg) | 200-400ms | <200ms | 🟡 Needs Optimization |
-| Rate Limiting | None | Full | 🔴 Not Implemented |
+### Tech Stack (STACK.md)
+- **Backend:** FastAPI, SQLAlchemy, Alembic, Redis
+- **Frontend:** Next.js, React, TypeScript, Tailwind
+- **Database:** PostgreSQL 16+
+- **Auth:** JWT, OAuth2 (Google, GitHub)
+- **Payments:** Stripe
+- **Storage:** S3/MinIO
 
----
+### Test Coverage (TESTING.md)
+- Pytest for backend (async-aware)
+- Jest + Playwright for frontend
+- Current coverage below 80% target
 
-## 👤 Team & Roles
+## Team Composition
 
-**Solo Developer** (you)
-- Backend services & security fixes
-- Database optimization & migrations
-- Testing & validation
-- Deployment & monitoring
+- **Project Lead/Architect:** Strategic direction, architecture decisions
+- **Development Team:** Code implementation (via agents or human developers)
+- **QA/Testing:** Coverage validation, integration tests
 
----
+## Project Constraints
 
-## 📅 Timeline: 1-2 Weeks
+- **Concurrency:** 1 message = all related operations (parallel execution)
+- **File Organization:** `/src`, `/tests`, `/docs`, `/config`, `/scripts`
+- **Code Quality:** Max 500 lines per file, TDD London School preferred
+- **Topology:** Hierarchical-mesh with max 15 agents
+- **Memory:** Hybrid (graphify + claude-flow memory store)
 
-### Week 1: Security Hardening
-- Days 1-2: Secrets management & environment variables
-- Days 3-4: Authentication security (JWT, OAuth fixes)
-- Day 5: Rate limiting & CORS configuration
+## Next Steps
 
-### Week 2: Performance & Stability
-- Days 1-2: N+1 query resolution
-- Days 3-4: Caching strategy implementation
-- Day 5: Race condition fixes & testing
+1. ✅ Codebase mapping complete (CONCERNS.md, ARCHITECTURE.md, etc.)
+2. → **Domain research** (book marketplace patterns, security best practices)
+3. → **Requirements definition** (scoped security & quality work)
+4. → **Roadmap creation** (phased approach to remediation)
+5. → `/gsd-plan-phase 1` to begin execution
 
----
+## Related Documents
 
-## 📁 Related Documents
-
-- **REQUIREMENTS.md** — Detailed requirements and acceptance criteria
-- **ROADMAP.md** — Phase breakdown and dependencies
-- **STACK.md** — Technology details and versions
+- **CONCERNS.md** — Identified security, performance, and debt issues
 - **ARCHITECTURE.md** — System design and layering
-- **CONCERNS.md** — Identified issues and mitigation strategies
-- **STATE.md** — Current project state and assumptions
-
----
-
-## 🚀 Next Steps
-
-1. **Review REQUIREMENTS.md** — Understand detailed requirements for each security issue
-2. **Review ROADMAP.md** — See phase breakdown and execution order
-3. **Run /gsd-plan-phase 1** — Start Phase 1: Security Hardening
-4. **Execute tasks** — Follow the plan, commit after each logical change
-5. **Run tests** — Validate all changes with test suite
-
----
-
-## ✍️ Project Management
-
-- **Command:** `/gsd-plan-phase <phase-number>` — Plan a specific phase
-- **Graph Query:** `/gsd-graphify query "security"` — Find related components
-- **Memory:** All decisions and learnings stored in `.claude-flow/data/`
-- **Version Control:** Commit each logical change with clear messages
-
----
-
-## 📞 Support & Documentation
-
-- **Codebase Map:** `.planning/codebase/` — 7 comprehensive documents
-- **Knowledge Graph:** `.planning/graphs/` — 1,497-node architecture map
-- **Memory System:** Persistent context across sessions via `.claude-flow/`
-- **API Docs:** `http://localhost:8000/api/v1/docs` (when running)
+- **STRUCTURE.md** — Directory organization and modules
+- **STACK.md** — Technology stack and dependencies
+- **TESTING.md** — Test infrastructure and coverage
+- **CONVENTIONS.md** — Code style and patterns
+- **config.json** — Workflow preferences (graphify enabled, HNSW enabled)
