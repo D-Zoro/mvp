@@ -1,433 +1,186 @@
-# Books4All — Testing Standards & Practices
+# Testing Strategy - Books4All
 
-**Last Updated:** 2026-04-18  
-**Scope:** Backend test framework, structure, mocking, and coverage guidelines
-
----
-
-## Overview
-
-The Books4All test suite is organized into three tiers, each with specific responsibilities and isolation guarantees. This document outlines the testing strategy, fixture architecture, and best practices to maintain high code quality and fast feedback loops.
+This document outlines the testing frameworks, infrastructure, coverage targets, and testing practices used in the Books4All project.
 
 ---
 
-## Test Tiers
+## Testing Overview
 
-### 1. Unit Tests (`tests/unit/`)
+Books4All uses a comprehensive testing strategy across both backend and frontend:
 
-**Purpose:** Test business logic in isolation, with zero external dependencies.
+- **Backend**: Pytest with async support, unit and integration tests
+- **Frontend**: Jest (configured but minimal tests) + Playwright for E2E
+- **Database**: Transactional isolation with rollback per test
+- **External Services**: Comprehensive mocking (Stripe, Redis, OAuth)
 
-**Characteristics:**
-- No database access
-- No HTTP requests
-- No network calls
-- Fast execution (milliseconds)
-- Pure Python — test functions, methods, validators
-- 100% deterministic
+---
 
-**What to Test:**
-- Service layer business logic (e.g., order status transitions)
-- Access control checks (e.g., "can user modify this order?")
-- Validation logic
-- Helper functions
-- Exception scenarios
+## Backend Testing
 
-**Example: Order Status Transitions**
-```python
-# tests/unit/test_services.py
+### Testing Framework: Pytest
 
-from types import SimpleNamespace
-from uuid import uuid4
-import pytest
+**Version**: `7.4.4`
 
-from app.models.order import OrderStatus
-from app.models.user import UserRole
-from app.services.exceptions import InvalidStatusTransitionError
-from app.services.order_service import OrderService
+**Key Plugins**:
+- `pytest-asyncio==0.23.3` - Async test support with automatic event loop
+- `pytest-cov==4.1.0` - Coverage reporting
 
-
-def _make_user(role: UserRole = UserRole.BUYER) -> SimpleNamespace:
-    """Build a lightweight fake user for testing."""
-    return SimpleNamespace(id=uuid4(), role=role, is_active=True)
-
-
-def _make_order(buyer_id=None, status: OrderStatus = OrderStatus.PENDING) -> SimpleNamespace:
-    """Build a lightweight fake order."""
-    return SimpleNamespace(
-        id=uuid4(),
-        buyer_id=buyer_id or uuid4(),
-        status=status,
-        items=[],
-    )
-
-
-class TestOrderStatusTransitions:
-    """Validates the _ALLOWED_TRANSITIONS map enforced by OrderService."""
-
-    def test_pending_to_payment_processing_allowed(self):
-        """PENDING → PAYMENT_PROCESSING is valid."""
-        # Should not raise
-        OrderService._assert_valid_transition(
-            OrderStatus.PENDING, OrderStatus.PAYMENT_PROCESSING
-        )
-
-    def test_pending_to_paid_forbidden(self):
-        """PENDING → PAID skips PAYMENT_PROCESSING and must be rejected."""
-        with pytest.raises(InvalidStatusTransitionError, match="pending"):
-            OrderService._assert_valid_transition(
-                OrderStatus.PENDING, OrderStatus.PAID
-            )
+**Configuration** (`pyproject.toml`):
+```toml
+[tool.pytest.ini_options]
+asyncio_mode = "auto"           # Auto-detect and handle async tests
+testpaths = ["tests"]           # Only run tests in tests/ directory
+addopts = "-v --tb=short"       # Verbose output, short tracebacks
 ```
 
-**Key Patterns:**
-- Use `SimpleNamespace` to create lightweight fake objects (avoids SQLAlchemy instrumentation)
-- Don't use `User.__new__()` — SQLAlchemy requires mapper initialization
-- Mock async functions with `AsyncMock` from `unittest.mock`
-- Focus on "happy path" and error cases, not every code branch
+### Test Organization
 
----
-
-### 2. Database Tests (`tests/DB/`)
-
-**Purpose:** Validate ORM models, constraints, migrations, and relationships.
-
-**Characteristics:**
-- Real PostgreSQL database (test instance)
-- Real SQLAlchemy ORM
-- Per-test rollback isolation (Alembic migrations run once per session)
-- Each test runs inside a transaction that rolls back after completion
-- Moderate speed (seconds per test)
-- Tests database schema, constraints, and ORM behavior
-
-**What to Test:**
-- Column constraints (unique, not null, defaults)
-- Relationships (foreign keys, cascades)
-- Indexes
-- Enum values
-- Soft delete behavior
-- Timestamp auto-updates
-- Database migrations
-
-**Example: User Model Constraints**
-```python
-# tests/DB/test_users.py
-
-import pytest
-from sqlalchemy.exc import IntegrityError
-
-from app.models.user import User, UserRole
-
-
-@pytest.mark.asyncio
-async def test_create_user(db_session):
-    """User table exists, UUID primary key works, enum works."""
-    user = User(
-        email="test@example.com",
-        role=UserRole.BUYER,
-        is_active=True,
-        email_verified=False,
-    )
-
-    db_session.add(user)
-    await db_session.commit()
-
-    assert user.id is not None
-
-
-@pytest.mark.asyncio
-async def test_unique_email_constraint(db_session):
-    """UNIQUE(email) constraint is enforced."""
-    user1 = User(
-        email="unique@example.com",
-        role=UserRole.BUYER,
-        is_active=True,
-        email_verified=False,
-    )
-
-    user2 = User(
-        email="unique@example.com",  # duplicate
-        role=UserRole.SELLER,
-        is_active=True,
-        email_verified=False,
-    )
-
-    db_session.add(user1)
-    await db_session.commit()
-
-    db_session.add(user2)
-
-    with pytest.raises(Exception):  # IntegrityError
-        await db_session.commit()
-
-    await db_session.rollback()
+```
+tests/
+├── conftest.py              # Shared fixtures and configuration
+├── unit/                    # Fast, isolated unit tests
+│   ├── __init__.py
+│   ├── test_schemas.py      # Pydantic schema validation
+│   ├── test_security.py     # JWT, hashing, token utilities
+│   └── test_services.py     # Service layer business logic
+├── integration/             # API + database integration tests
+│   ├── __init__.py
+│   ├── test_auth_api.py     # Authentication endpoints
+│   ├── test_books_api.py    # Book listing endpoints
+│   ├── test_orders_api.py   # Order management endpoints
+│   ├── test_reviews_api.py  # Review endpoints
+│   ├── test_payments_api.py # Stripe integration
+│   ├── test_rate_limiting.py    # Rate limiter middleware
+│   ├── test_error_handling.py    # Exception handlers
+│   ├── test_status_codes.py      # HTTP status code accuracy
+│   └── test_async_patterns.py    # Async/await patterns
+└── DB/                      # Database-level fixtures
+    └── conftest.py          # DB-specific configuration
 ```
 
-**Key Patterns:**
-- Use the `db_session` fixture (function-scoped, rolled back after each test)
-- Verify constraints by attempting violations
-- Test cascade behavior (e.g., delete seller → delete their books)
-- Focus on schema properties, not business logic
+### Fixture Architecture
 
----
-
-### 3. Integration Tests (`tests/integration/`)
-
-**Purpose:** Test API endpoints end-to-end with a real database and HTTP layer.
-
-**Characteristics:**
-- Real FastAPI app (via `AsyncClient` + `ASGITransport`)
-- Real database with per-test rollback
-- Full request/response cycle
-- HTTP status codes, headers, and body validation
-- Slower than unit tests (seconds per test)
-- Tests business logic through the API
-
-**What to Test:**
-- Endpoint status codes and response bodies
-- Authentication and authorization flows
-- Multi-step workflows (e.g., register → login → create book → order)
-- Error responses and validation messages
-- Pagination and filtering
-- Rate limiting behavior
-
-**Example: Authentication API**
-```python
-# tests/integration/test_auth_api.py
-
-import pytest
-from httpx import AsyncClient
-
-from tests.conftest import create_test_user, make_auth_headers
-from app.models.user import UserRole
-
-
-BASE = "/api/v1/auth"
-
-
-async def test_register_success(async_client: AsyncClient):
-    """Valid registration returns 201 with tokens and user details."""
-    resp = await async_client.post(f"{BASE}/register", json={
-        "email": "newuser@example.com",
-        "password": "Secure1234",
-        "role": "buyer",
-    })
-    assert resp.status_code == 201
-    body = resp.json()
-    assert "access_token" in body
-    assert body["user"]["email"] == "newuser@example.com"
-
-
-async def test_register_duplicate_email(async_client: AsyncClient, db_session):
-    """Duplicate email returns 409 Conflict."""
-    await create_test_user(db_session, email="taken@example.com")
-
-    resp = await async_client.post(f"{BASE}/register", json={
-        "email": "taken@example.com",
-        "password": "Secure1234",
-    })
-    assert resp.status_code == 409
-
-
-async def test_login_success(async_client: AsyncClient, db_session):
-    """Valid login returns 200 with tokens."""
-    user = await create_test_user(
-        db_session,
-        email="user@example.com",
-        password="Test1234!"
-    )
-
-    resp = await async_client.post(f"{BASE}/login", json={
-        "email": "user@example.com",
-        "password": "Test1234!",
-    })
-    assert resp.status_code == 200
-    body = resp.json()
-    assert "access_token" in body
-    assert body["user"]["id"] == str(user.id)
-
-
-async def test_me_authenticated(async_client: AsyncClient, buyer_user, buyer_headers):
-    """GET /me with valid token returns user profile."""
-    resp = await async_client.get(
-        f"{BASE}/me",
-        headers=buyer_headers,
-    )
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["email"] == buyer_user.email
-    assert body["role"] == "buyer"
-
-
-async def test_me_unauthenticated(async_client: AsyncClient):
-    """GET /me without token returns 401 Unauthorized."""
-    resp = await async_client.get(f"{BASE}/me")
-    assert resp.status_code == 401
+**Hierarchy**:
+```
+async_engine (session scope)
+    ↓
+db_session (function scope, rollback)
+    ↓
+async_client (function scope, with overridden dependency)
+    ↓
+{buyer_user, seller_user, admin_user} (fixtures per test)
 ```
 
-**Key Patterns:**
-- Use the `async_client` fixture (injects `db_session` via dependency override)
-- Use pre-built fixtures: `buyer_user`, `seller_user`, `admin_user`
-- Use `buyer_headers`, `seller_headers`, `admin_headers` for authenticated requests
-- Test both success and failure paths
-- Validate exact response structures
+**Scope Explanation**:
+- `session`: Runs Alembic migrations once for entire test suite
+- `function`: Creates fresh, isolated test data per test case
+- Rollback: Transaction rolled back after each test for hermetic isolation
 
----
+### Core Fixtures (`conftest.py`)
 
-## Fixture Architecture
+#### Database Fixtures
 
-### Session-Level Setup
-
-The test suite uses a **session-scoped engine** with per-function rollback for isolation:
-
+**`async_engine`** (session-scoped)
 ```python
 @pytest_asyncio.fixture(scope="session")
 async def async_engine():
     """
-    Session-scoped async engine.
-    Runs Alembic migrations once for the entire test session.
+    Creates async engine and runs Alembic migrations once.
+    Used by all tests in the session.
     """
     engine = create_async_engine(settings.DATABASE_URL)
-
     alembic_cfg = Config("alembic.ini")
-    alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
     command.upgrade(alembic_cfg, "head")  # Run migrations
-
     yield engine
     await engine.dispose()
 ```
 
-**Benefit:** Migrations run once per session (fast), not per test (slow).
-
-### Function-Level Database Session
-
-Each test gets a fresh, isolated view via transaction rollback:
-
+**`db_session`** (function-scoped)
 ```python
 @pytest_asyncio.fixture(scope="function")
 async def db_session(async_engine) -> AsyncGenerator[AsyncSession, None]:
     """
-    Function-scoped DB session that is rolled back after each test.
-    Guarantees test isolation without cleanup.
+    Creates a transactional session that's rolled back after each test.
+    Ensures test isolation and fast cleanup.
     """
     async with async_engine.connect() as conn:
         trans = await conn.begin()
-
         Session = async_sessionmaker(bind=conn, expire_on_commit=False)
         session = Session()
-
         yield session
-
         await session.close()
-        await trans.rollback()  # ← all changes discarded
+        await trans.rollback()  # Revert all changes
 ```
 
-**How it works:**
-1. Begin a transaction at the connection level
-2. Create a session bound to that transaction
-3. Test runs (make DB changes)
-4. After test: rollback the transaction (all changes discarded)
-5. Next test: clean database again
+#### HTTP Client Fixture
 
-**Benefit:** Hermetic tests (no cleanup code needed), fast (rollback is instant).
-
-### HTTP Client with Dependency Override
-
-Integration tests use `AsyncClient` with overridden dependencies:
-
+**`async_client`** (function-scoped)
 ```python
 @pytest_asyncio.fixture(scope="function")
 async def async_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """
-    FastAPI AsyncClient with test DB session injected.
-    Overrides get_db dependency so all routes use the rollback session.
+    FastAPI AsyncClient with overridden get_db dependency.
+    All routes receive the test db_session instead of production session.
     """
     async def _override_get_db():
         yield db_session
-
+    
     app.dependency_overrides[get_db] = _override_get_db
-
+    
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",
     ) as client:
         yield client
-
+    
     app.dependency_overrides.clear()
 ```
 
-**How it works:**
-1. Override `get_db` dependency to return the test session
-2. All routes that `Depends(get_db)` now use the test session
-3. Requests go through full FastAPI stack (middleware, authentication, etc.)
-4. After test: clear overrides
+#### Mock Fixtures
 
-**Benefit:** Full end-to-end testing with real app logic and isolation.
-
----
-
-## Mocking Strategy
-
-### External Services (Redis, Stripe)
-
-#### Redis Rate Limiter
-Mock globally with `autouse=True` fixture:
-
+**`mock_redis`** (auto-used)
 ```python
 @pytest.fixture(autouse=True)
 def mock_redis():
     """
     Automatically patches Redis rate limiter for every test.
-    This ensures rate limiting never blocks test requests.
+    Prevents need for live Redis and ensures no rate-limiting blocks tests.
     """
     with patch(
         "app.core.rate_limiter.rate_limiter.is_rate_limited",
         new_callable=AsyncMock,
-        return_value=(False, 100, 0),  # is_limited, remaining, reset_time
+        return_value=(False, 100, 0),  # Never rate-limited, high quota
     ):
         yield
 ```
 
-**Effect:** Every test's rate limiter always allows requests.
-
-#### Stripe Payment Processing
-Mock on-demand with optional fixture:
-
+**`mock_stripe`** (optional per-test)
 ```python
 @pytest.fixture()
 def mock_stripe():
     """
-    Patches Stripe SDK calls used by PaymentService.
-    Returns a mock checkout session object.
+    Patches Stripe SDK for payment testing.
+    Returns mock session object with predictable test values.
     """
     fake_session = MagicMock()
     fake_session.id = "cs_test_fake_session_id"
     fake_session.url = "https://checkout.stripe.com/fake"
-
-    with patch("stripe.checkout.Session.create", return_value=fake_session) as mock_create, \
-         patch("stripe.Webhook.construct_event") as mock_webhook:
+    
+    with patch("stripe.checkout.Session.create", return_value=fake_session), \
+         patch("stripe.Webhook.construct_event"), \
+         patch("stripe.Refund.create"):
         yield {
             "create": mock_create,
             "webhook": mock_webhook,
+            "refund": mock_refund,
             "session": fake_session,
         }
 ```
 
-**Usage:**
+#### Test Data Factories
+
+**`create_test_user()`** - Factory function
 ```python
-async def test_create_checkout_session(async_client: AsyncClient, mock_stripe):
-    """Stripe is mocked, returns predictable session."""
-    resp = await async_client.post("/api/v1/orders/123/checkout")
-    assert resp.status_code == 200
-    # mock_stripe["create"] was called with the order details
-```
-
-### Test Data Factories
-
-Use helper functions to create consistent test data:
-
-```python
-# tests/conftest.py
-
 async def create_test_user(
     db: AsyncSession,
     *,
@@ -437,10 +190,23 @@ async def create_test_user(
     is_active: bool = True,
     email_verified: bool = True,
 ) -> User:
-    """Create and persist a test user."""
+    """
+    Create and persist a test user with hashed password.
+    
+    Args:
+        db: Active async session
+        email: Unique email (auto-generated if None)
+        password: Plain-text password (auto-hashed)
+        role: User role (BUYER, SELLER, ADMIN)
+        is_active: Account active status
+        email_verified: Email verification status
+    
+    Returns:
+        Persisted User ORM instance
+    """
     if email is None:
         email = f"test_{uuid.uuid4().hex[:8]}@example.com"
-
+    
     user = User(
         email=email.lower(),
         password_hash=hash_password(password),
@@ -452,8 +218,10 @@ async def create_test_user(
     await db.flush()
     await db.refresh(user)
     return user
+```
 
-
+**`create_test_book()`** - Factory function
+```python
 async def create_test_book(
     db: AsyncSession,
     *,
@@ -463,7 +231,20 @@ async def create_test_book(
     quantity: int = 5,
     status: BookStatus = BookStatus.ACTIVE,
 ) -> Book:
-    """Create and persist a test book listing."""
+    """
+    Create and persist a test book listing.
+    
+    Args:
+        db: Active async session
+        seller: Owning seller user
+        title: Book title
+        price: Listing price
+        quantity: Available stock
+        status: Listing status
+    
+    Returns:
+        Persisted Book ORM instance
+    """
     book = Book(
         seller_id=seller.id,
         title=title,
@@ -480,410 +261,685 @@ async def create_test_book(
     return book
 ```
 
-**Benefits:**
-- Consistent test data across tests
-- Reduces boilerplate in test functions
-- Easy to override defaults for specific scenarios
+**`make_auth_headers()`** - Helper function
+```python
+def make_auth_headers(user: User) -> dict[str, str]:
+    """
+    Generate Bearer auth headers for a user without DB call.
+    
+    Args:
+        user: User to generate token for
+    
+    Returns:
+        Dict with Authorization header
+    """
+    token = create_access_token(user.id, user.role.value)
+    return {"Authorization": f"Bearer {token}"}
+```
 
----
-
-## Pre-Built Fixtures
-
-### User Fixtures
+#### Pre-built User Fixtures
 
 ```python
 @pytest_asyncio.fixture()
 async def buyer_user(db_session: AsyncSession) -> User:
-    """Ready-to-use buyer user."""
+    """Ready-to-use buyer user with email buyer@test.com"""
     return await create_test_user(db_session, role=UserRole.BUYER, email="buyer@test.com")
-
 
 @pytest_asyncio.fixture()
 async def seller_user(db_session: AsyncSession) -> User:
-    """Ready-to-use seller user."""
+    """Ready-to-use seller user with email seller@test.com"""
     return await create_test_user(db_session, role=UserRole.SELLER, email="seller@test.com")
-
 
 @pytest_asyncio.fixture()
 async def admin_user(db_session: AsyncSession) -> User:
-    """Ready-to-use admin user."""
+    """Ready-to-use admin user with email admin@test.com"""
     return await create_test_user(db_session, role=UserRole.ADMIN, email="admin@test.com")
-```
 
-### Auth Header Fixtures
-
-```python
 @pytest.fixture()
 def buyer_headers(buyer_user: User) -> dict[str, str]:
-    """Auth headers for the buyer fixture user."""
+    """Auth headers for buyer fixture user"""
     return make_auth_headers(buyer_user)
-
 
 @pytest.fixture()
 def seller_headers(seller_user: User) -> dict[str, str]:
-    """Auth headers for the seller fixture user."""
+    """Auth headers for seller fixture user"""
     return make_auth_headers(seller_user)
+
+@pytest.fixture()
+def admin_headers(admin_user: User) -> dict[str, str]:
+    """Auth headers for admin fixture user"""
+    return make_auth_headers(admin_user)
 ```
 
-**Usage in Tests:**
-```python
-async def test_get_my_books(async_client: AsyncClient, seller_headers):
-    """Seller can retrieve their own books."""
-    resp = await async_client.get(
-        "/api/v1/books/my-listings",
-        headers=seller_headers,
-    )
-    assert resp.status_code == 200
-```
+### Unit Testing
 
----
+**Purpose**: Fast, isolated tests of individual components without I/O
 
-## Best Practices
+**Location**: `tests/unit/`
 
-### General Principles
+**Key Files**:
 
-1. **Test one thing per test** — clear, descriptive test name
-   ```python
-   # ✓ Good: tests a single scenario
-   async def test_register_duplicate_email_returns_409(async_client, db_session):
-       ...
+#### `test_schemas.py`
+- Validates Pydantic request/response schema constraints
+- Tests field validators and enum membership
+- Synchronous tests (no database required)
+- Example:
+  ```python
+  def test_book_create_invalid_price():
+      """Price must be positive."""
+      with pytest.raises(ValidationError) as exc_info:
+          BookCreate(
+              title="Test",
+              author="Author",
+              condition=BookCondition.GOOD,
+              price=-5.0,  # Invalid: negative
+              quantity=1,
+          )
+      assert "greater than 0" in str(exc_info.value)
+  ```
 
-   # ✗ Wrong: tests multiple scenarios
-   async def test_register(async_client, db_session):
-       # Test success
-       # Test duplicate email
-       # Test weak password
-       # ...
-   ```
+#### `test_security.py`
+- JWT token creation, validation, expiration
+- Password hashing and verification
+- Token refresh logic
+- Async tests but no database
+- Example:
+  ```python
+  async def test_create_access_token():
+      """Token should encode user ID and role."""
+      user_id = uuid4()
+      token = create_access_token(user_id, "seller")
+      
+      payload = verify_access_token(token)
+      assert payload["sub"] == str(user_id)
+      assert payload["role"] == "seller"
+  ```
 
-2. **Use descriptive test names** — name explains the scenario
-   ```python
-   # ✓ Good
-   def test_pending_order_can_transition_to_payment_processing():
-       ...
+#### `test_services.py`
+- Business logic without database (mocked repositories)
+- Service method behavior and error conditions
+- Example:
+  ```python
+  async def test_order_service_insufficient_stock(mock_book_repo):
+      """Service should raise error if stock insufficient."""
+      mock_book_repo.get_by_id.return_value = Mock(quantity=1)
+      
+      service = OrderService(mock_book_repo)
+      
+      with pytest.raises(InsufficientStockError):
+          await service.create_order(book_id, quantity=5)
+  ```
 
-   # ✗ Wrong: name doesn't explain what's being tested
-   def test_order_transition():
-       ...
-   ```
+### Integration Testing
 
-3. **Arrange → Act → Assert pattern**
-   ```python
-   async def test_create_order_deducts_stock(async_client, db_session, seller_user):
-       # Arrange
-       book = await create_test_book(db_session, seller=seller_user, quantity=5)
-       initial_quantity = book.quantity
+**Purpose**: Test API endpoints, database interactions, error handling
 
-       # Act
-       resp = await async_client.post(
-           "/api/v1/orders",
-           json={"book_id": str(book.id), "quantity": 2},
-           headers=make_auth_headers(...),
-       )
+**Location**: `tests/integration/`
 
-       # Assert
-       assert resp.status_code == 201
-       book_after = await db_session.get(Book, book.id)
-       assert book_after.quantity == initial_quantity - 2
-   ```
+**Key Files**:
 
-4. **Test error cases, not just success** — especially permission checks
-   ```python
-   # ✓ Good: test both success and error
-   async def test_seller_can_update_own_book(async_client, db_session, seller_user):
-       book = await create_test_book(db_session, seller=seller_user)
-       resp = await async_client.put(
-           f"/api/v1/books/{book.id}",
-           json={"price": 19.99},
-           headers=make_auth_headers(seller_user),
-       )
-       assert resp.status_code == 200
+#### `test_auth_api.py`
+- Authentication endpoints (login, register, refresh, logout)
+- OAuth flows (Google, GitHub)
+- Email verification and password reset
+- Token lifecycle
+- Example:
+  ```python
+  async def test_login_success(async_client, buyer_user):
+      """Successful login returns access and refresh tokens."""
+      response = await async_client.post(
+          "/auth/login",
+          json={"email": "buyer@test.com", "password": "Test1234!"}
+      )
+      
+      assert response.status_code == 200
+      data = response.json()
+      assert "access_token" in data
+      assert "refresh_token" in data
+      assert data["user"]["email"] == "buyer@test.com"
+  ```
 
-   async def test_seller_cannot_update_other_seller_book(async_client, db_session, seller_user, seller_user_2):
-       book = await create_test_book(db_session, seller=seller_user_2)
-       resp = await async_client.put(
-           f"/api/v1/books/{book.id}",
-           json={"price": 19.99},
-           headers=make_auth_headers(seller_user),
-       )
-       assert resp.status_code == 403  # Forbidden
-   ```
+#### `test_books_api.py`
+- Book listing, searching, filtering
+- Create, update, delete book listings (seller role)
+- Stock management
+- Example:
+  ```python
+  async def test_list_books_with_pagination(async_client, seller_user):
+      """Listing books should support pagination."""
+      # Create multiple books
+      for i in range(5):
+          await async_client.post(
+              "/books",
+              json={"title": f"Book {i}", ...},
+              headers=seller_headers(seller_user)
+          )
+      
+      response = await async_client.get("/books?page=1&page_size=2")
+      
+      assert response.status_code == 200
+      data = response.json()
+      assert len(data["items"]) == 2
+      assert data["total"] == 5
+  ```
 
-5. **Don't test framework code** — trust FastAPI, SQLAlchemy, etc.
-   ```python
-   # ✗ Wrong: testing Pydantic, not your code
-   def test_pydantic_validation():
-       from app.schemas.book import BookCreate
-       with pytest.raises(ValidationError):
-           BookCreate(title="", author="")
+#### `test_orders_api.py`
+- Order creation with items
+- Order status transitions
+- Cancellation and refunds
+- Seller/buyer permission checks
+- Example:
+  ```python
+  async def test_create_order(async_client, buyer_user, seller_user, seller_headers):
+      """Order should be created with items."""
+      # Create book first
+      book_response = await async_client.post(
+          "/books",
+          json={"title": "Test Book", "price": 9.99, ...},
+          headers=seller_headers
+      )
+      book_id = book_response.json()["id"]
+      
+      # Create order
+      response = await async_client.post(
+          "/orders",
+          json={
+              "items": [{"book_id": book_id, "quantity": 2}],
+              "shipping_address": {...}
+          },
+          headers=buyer_headers(buyer_user)
+      )
+      
+      assert response.status_code == 201
+      assert response.json()["status"] == "pending"
+  ```
 
-   # ✓ Right: test your validation logic in business rules
-   async def test_create_book_rejects_negative_price(async_client, seller_headers):
-       resp = await async_client.post(
-           "/api/v1/books",
-           json={"title": "Book", "price": -5},
-           headers=seller_headers,
-       )
-       assert resp.status_code == 422  # Validation error
-   ```
+#### `test_reviews_api.py`
+- Create, update, delete reviews
+- Verified-purchase requirement
+- Rating constraints
+- Example:
+  ```python
+  async def test_create_review_requires_purchase(async_client, buyer_user):
+      """Review should require verified purchase."""
+      response = await async_client.post(
+          "/reviews",
+          json={"book_id": some_book_id, "rating": 5, "text": "Great!"},
+          headers=buyer_headers(buyer_user)
+      )
+      
+      assert response.status_code == 403
+      assert "purchase required" in response.json()["detail"].lower()
+  ```
 
-### Unit Testing Patterns
+#### `test_error_handling.py`
+- Exception handler behavior
+- Error response format consistency
+- Field-level validation error details
+- 5xx error handling
+- Example:
+  ```python
+  async def test_validation_error_format(async_client):
+      """Validation errors should include field-level details."""
+      response = await async_client.post(
+          "/auth/register",
+          json={"email": "invalid-email", "password": "short"}
+      )
+      
+      assert response.status_code == 422
+      data = response.json()
+      assert "errors" in data
+      errors = data["errors"]
+      assert any(e["field"] == "email" for e in errors)
+  ```
 
-1. **Use SimpleNamespace for fake objects**
-   ```python
-   # ✓ Good: lightweight, no SQLAlchemy instrumentation
-   from types import SimpleNamespace
-   user = SimpleNamespace(id=uuid4(), role=UserRole.BUYER, is_active=True)
+#### `test_status_codes.py`
+- Comprehensive HTTP status code validation
+- All error conditions mapped correctly
+- Success status codes (200, 201, 204)
+- Error status codes (400, 401, 403, 404, 409, 422, 500)
+- Example:
+  ```python
+  async def test_not_found_returns_404(async_client):
+      """Requesting non-existent book returns 404."""
+      response = await async_client.get(f"/books/{uuid4()}")
+      assert response.status_code == 404
+  
+  async def test_insufficient_stock_returns_409(async_client, buyer_user):
+      """Creating order with insufficient stock returns 409."""
+      # Create book with 1 unit
+      # Attempt to order 2 units
+      # Should get 409 Conflict
+  ```
 
-   # ✗ Wrong: SQLAlchemy mapper initialization issues
-   user = User.__new__(User)
-   user.id = uuid4()
-   ```
+#### `test_rate_limiting.py`
+- Rate limit enforcement
+- Quota tracking
+- Exempted endpoints (health, metrics)
+- Example:
+  ```python
+  async def test_rate_limit_enforcement(async_client):
+      """Requests exceeding limit should be rejected."""
+      # Make requests up to limit (settings.RATE_LIMIT_DEFAULT_CALLS)
+      # Each should succeed
+      # Next request should be rejected with 429
+      
+      for i in range(settings.RATE_LIMIT_DEFAULT_CALLS):
+          response = await async_client.get("/books")
+          assert response.status_code == 200
+      
+      response = await async_client.get("/books")
+      assert response.status_code == 429
+  ```
 
-2. **Mock async functions with AsyncMock**
-   ```python
-   # ✓ Good
-   from unittest.mock import AsyncMock
-   mock_repo = AsyncMock()
-   mock_repo.get_by_email.return_value = SimpleNamespace(id=uuid4(), email="user@example.com")
+#### `test_async_patterns.py`
+- Async/await patterns validation
+- Concurrent operations
+- Connection pooling
+- Event loop behavior
+- Example:
+  ```python
+  async def test_concurrent_book_creation(async_client, seller_user):
+      """Concurrent requests should work correctly."""
+      import asyncio
+      
+      tasks = [
+          async_client.post(
+              "/books",
+              json={"title": f"Book {i}", ...},
+              headers=seller_headers(seller_user)
+          )
+          for i in range(10)
+      ]
+      
+      responses = await asyncio.gather(*tasks)
+      
+      assert all(r.status_code == 201 for r in responses)
+      assert len(responses) == 10
+  ```
 
-   # Test
-   result = await auth_service.login(email="user@example.com", password="pass")
-   ```
+### Coverage Configuration
 
-3. **Test pure functions, not integration**
-   ```python
-   # ✓ Good: tests the actual business logic
-   def test_assert_valid_transition():
-       OrderService._assert_valid_transition(OrderStatus.PENDING, OrderStatus.PAYMENT_PROCESSING)
-       # Should not raise
-
-   # ✗ Wrong: indirectly testing through integration
-   async def test_update_order_status(async_client, db_session, order):
-       resp = await async_client.patch(f"/api/v1/orders/{order.id}/status", ...)
-       # Too many layers of indirection
-   ```
-
-### Integration Testing Patterns
-
-1. **Use fixtures to set up data**
-   ```python
-   async def test_buyer_can_review_purchased_book(
-       async_client: AsyncClient,
-       db_session: AsyncSession,
-       buyer_user: User,
-       seller_user: User,
-   ):
-       # Data setup via fixtures
-       book = await create_test_book(db_session, seller=seller_user)
-       order = await create_test_order(db_session, buyer=buyer_user, book=book)
-       order.status = OrderStatus.DELIVERED
-       await db_session.commit()
-
-       # Test
-       resp = await async_client.post(
-           f"/api/v1/books/{book.id}/reviews",
-           json={"rating": 5, "text": "Great book!"},
-           headers=make_auth_headers(buyer_user),
-       )
-       assert resp.status_code == 201
-   ```
-
-2. **Verify response structure and content**
-   ```python
-   async def test_get_books_list(async_client: AsyncClient):
-       resp = await async_client.get("/api/v1/books")
-       assert resp.status_code == 200
-       body = resp.json()
-
-       # Verify structure
-       assert "items" in body
-       assert "total" in body
-       assert "page" in body
-       assert isinstance(body["items"], list)
-
-       # Verify item structure
-       if body["items"]:
-           book = body["items"][0]
-           assert "id" in book
-           assert "title" in book
-           assert "price" in book
-   ```
-
-3. **Test authentication and authorization**
-   ```python
-   async def test_unauthorized_request(async_client: AsyncClient):
-       """Request without token returns 401."""
-       resp = await async_client.get("/api/v1/books/my-listings")
-       assert resp.status_code == 401
-
-   async def test_buyer_cannot_access_seller_endpoint(
-       async_client: AsyncClient,
-       buyer_headers: dict[str, str],
-   ):
-       """Buyer trying seller-only endpoint returns 403."""
-       resp = await async_client.post(
-           "/api/v1/books",
-           json={"title": "Book", "price": 9.99, ...},
-           headers=buyer_headers,
-       )
-       assert resp.status_code == 403
-   ```
-
----
-
-## Running Tests
-
-### All Tests
-```bash
-cd backend
-pytest tests/ -v
-```
-
-### By Tier
-```bash
-# Unit tests only (fast)
-pytest tests/unit/ -v
-
-# Database tests (medium)
-pytest tests/DB/ -v
-
-# Integration tests (slower)
-pytest tests/integration/ -v
-```
-
-### With Coverage
-```bash
-pytest tests/unit/ tests/DB/ --cov=app --cov-report=term-missing
-```
-
-### Specific Test
-```bash
-pytest tests/integration/test_auth_api.py::test_register_success -v
-```
-
-### With Markers
-```bash
-# Run only fast tests (marked with @pytest.mark.fast)
-pytest -m fast
-
-# Run all except slow tests
-pytest -m "not slow"
-```
-
----
-
-## Configuration
-
-### pytest.ini Options (in pyproject.toml)
-
+**Configuration** (`pyproject.toml`):
 ```toml
-[tool.pytest.ini_options]
-asyncio_mode = "auto"           # No @pytest.mark.asyncio needed
-testpaths = ["tests"]
-addopts = "-v --tb=short"
-
 [tool.coverage.run]
 source = ["app"]
 omit = ["app/core/database.py", "*/migrations/*", "*/__pycache__/*"]
 
 [tool.coverage.report]
 exclude_lines = [
-    "pragma: no cover",
-    "if TYPE_CHECKING:",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.:",
+    "pragma: no cover",           # Explicitly marked
+    "if TYPE_CHECKING:",          # Type-only imports
+    "raise NotImplementedError",  # Abstract methods
+    "if __name__ == .__main__.:", # Script guards
 ]
 ```
 
----
+**Coverage Targets**:
+- Target: 80%+ overall coverage
+- Core business logic (services, repositories): 90%+
+- API endpoints: 85%+
+- Excluded: Database connection, migrations, type-only code
 
-## Known Issues & Gotchas
+**Running Coverage**:
+```bash
+# Generate coverage report
+pytest --cov=app --cov-report=html tests/
 
-### 1. Password Hashing in Tests
-bcrypt has a 72-byte limit. Passwords must be ≤ 72 bytes:
-```python
-# ✓ Good
-hash_password("Secure1234")  # 10 bytes
-
-# ✗ Wrong: will raise ValueError on hash detection
-password = "x" * 100  # > 72 bytes
-hash_password(password)
+# View HTML report
+open htmlcov/index.html
 ```
 
-### 2. SQLAlchemy Async Sessions
-Always use `await`:
-```python
-# ✓ Good
-result = await session.execute(select(User))
+### Test Naming Convention
 
-# ✗ Wrong: coroutine not awaited
-result = session.execute(select(User))
-```
-
-### 3. ORM Refresh in Tests
-After commit, refresh to get updated timestamps:
-```python
-# In fixture
-await db_session.commit()
-await db_session.refresh(user)  # ← get updated created_at, etc.
-```
-
-### 4. Alembic & Test Database
-Alembic migrations run once per session:
-- If you add a migration during test development, restart pytest
-- Session-scoped fixture ensures fast re-runs
-
-### 5. Redis Mocking
-Redis is mocked globally via `autouse=True` fixture. To test Redis behavior explicitly:
-```python
-# Temporarily disable the mock
-def test_redis_failure():
-    with patch.object(rate_limiter, "is_rate_limited", side_effect=Exception("Redis down")):
-        # Test behavior when Redis is down
-        pass
-```
-
----
-
-## Coverage Goals
-
-| Tier | Target | Rationale |
-|------|--------|-----------|
-| Unit | 80%+ | Fast feedback, catches logic errors early |
-| DB | 70%+ | Models are straightforward; cover edge cases |
-| Integration | 60%+ | More expensive; focus on critical paths |
-| **Overall** | **75%+** | High confidence in code quality |
-
-**Critical paths to prioritize:**
-- Authentication (login, token refresh)
-- Payment processing (order creation, checkout)
-- Authorization checks (ownership, role-based access)
-- Error handling (validation, not found, permission denied)
+- Test functions: `test_{feature}_{scenario}` 
+  - Example: `test_login_success`, `test_book_not_found_returns_404`
+- Test classes: `Test{FeatureName}`
+  - Example: `TestAuthService`, `TestBookRepository`
+- Descriptive docstrings explaining the test purpose
+- Example:
+  ```python
+  async def test_create_order_with_multiple_items():
+      """Order should accept multiple items from different sellers."""
+      # Arrange
+      buyer = await create_test_user(db, role=UserRole.BUYER)
+      seller1 = await create_test_user(db, role=UserRole.SELLER, email="seller1@test.com")
+      seller2 = await create_test_user(db, role=UserRole.SELLER, email="seller2@test.com")
+      book1 = await create_test_book(db, seller=seller1)
+      book2 = await create_test_book(db, seller=seller2)
+      
+      # Act
+      response = await async_client.post(
+          "/orders",
+          json={
+              "items": [
+                  {"book_id": str(book1.id), "quantity": 1},
+                  {"book_id": str(book2.id), "quantity": 2},
+              ],
+              "shipping_address": {...}
+          },
+          headers=make_auth_headers(buyer)
+      )
+      
+      # Assert
+      assert response.status_code == 201
+      order = response.json()
+      assert len(order["items"]) == 2
+  ```
 
 ---
 
-## Summary Checklist
+## Frontend Testing
 
-- [ ] Unit tests: no DB, pure logic, SimpleNamespace for mocks
-- [ ] DB tests: schema, constraints, relationships, real DB with rollback
-- [ ] Integration tests: end-to-end API flows, auth, authorization
-- [ ] Use fixtures to set up data (user_user, seller_user, auth headers)
-- [ ] Mock external services (Redis, Stripe) globally or per-test
-- [ ] Test error cases, not just success
-- [ ] Use descriptive test names
-- [ ] Arrange → Act → Assert pattern
-- [ ] Verify both status codes and response structure
-- [ ] Don't test framework code (FastAPI, Pydantic, SQLAlchemy)
-- [ ] Run tests frequently during development (`pytest -v`)
+### Testing Framework: Jest
+
+**Version**: `^30.3.0`
+
+**Configuration**:
+- Configured via `package.json` scripts
+- TypeScript support via `ts-jest`
+- Testing library for React component testing
+
+**Scripts**:
+```json
+{
+  "test": "jest --passWithNoTests",
+  "test:e2e": "playwright test"
+}
+```
+
+**Current Status**: Minimal test coverage in place
+
+### E2E Testing: Playwright
+
+**Version**: `^1.58.2`
+
+**Scripts**:
+- `test:e2e` - Run all E2E tests
+- Supports headless and headed execution
+- Test report generation
+
+**Current Status**: E2E test framework configured, tests can be added
+
+### Test Structure
+
+```
+frontend/
+├── src/
+│   ├── components/          # Component test examples TBD
+│   ├── lib/
+│   │   ├── api/            # API client tests TBD
+│   │   └── hooks/          # Hook tests TBD
+│   └── store/              # State management tests TBD
+└── e2e/                    # E2E tests (Playwright)
+    └── *.spec.ts
+```
+
+### Testing Best Practices (Frontend)
+
+*To be implemented*:
+
+1. **Component Tests** (Jest + React Testing Library)
+   - Test user interactions, not implementation
+   - Mock API calls and external dependencies
+   - Test props, state, and conditional rendering
+   - Example pattern:
+     ```typescript
+     import { render, screen, fireEvent } from "@testing-library/react";
+     import { BookCard } from "@/components/BookCard";
+
+     describe("BookCard", () => {
+       it("should display book title", () => {
+         const props = {
+           id: "123",
+           title: "Test Book",
+           price: 9.99,
+         };
+         render(<BookCard {...props} />);
+         
+         expect(screen.getByText("Test Book")).toBeInTheDocument();
+       });
+
+       it("should call onClick handler when clicked", () => {
+         const onClick = jest.fn();
+         render(<BookCard {...props} onClick={onClick} />);
+         
+         fireEvent.click(screen.getByRole("button"));
+         expect(onClick).toHaveBeenCalled();
+       });
+     });
+     ```
+
+2. **Hook Tests** (React Testing Library)
+   - Test custom hook behavior
+   - Mock external dependencies (API client, store)
+   - Example pattern:
+     ```typescript
+     import { renderHook, act, waitFor } from "@testing-library/react";
+     import { useBooks } from "@/lib/hooks/useBooks";
+
+     describe("useBooks", () => {
+       it("should load books on mount", async () => {
+         const { result } = renderHook(() => useBooks());
+         
+         expect(result.current.isLoading).toBe(true);
+         
+         await waitFor(() => {
+           expect(result.current.isLoading).toBe(false);
+           expect(result.current.books.length).toBeGreaterThan(0);
+         });
+       });
+     });
+     ```
+
+3. **E2E Tests** (Playwright)
+   - Full user workflows
+   - Cross-browser testing
+   - Visual regression testing (optional)
+   - Example pattern:
+     ```typescript
+     import { test, expect } from "@playwright/test";
+
+     test("user should be able to login and view books", async ({ page }) => {
+       await page.goto("http://localhost:3000/login");
+       
+       await page.fill('input[type="email"]', "buyer@test.com");
+       await page.fill('input[type="password"]', "Test1234!");
+       await page.click('button[type="submit"]');
+       
+       await expect(page).toHaveURL("/books");
+       await expect(page.locator("text=Books")).toBeVisible();
+     });
+     ```
 
 ---
 
-## See Also
+## Running Tests
 
-- [CONVENTIONS.md](./CONVENTIONS.md) — Code style and patterns
-- `tests/conftest.py` — Fixture definitions and test helpers
-- `tests/unit/test_services.py` — Unit test examples
-- `tests/DB/test_users.py` — Database test examples
-- `tests/integration/test_auth_api.py` — Integration test examples
-- `pyproject.toml` — pytest configuration
+### Backend
+
+```bash
+# Run all tests
+pytest
+
+# Run with verbose output
+pytest -v
+
+# Run specific test file
+pytest tests/unit/test_schemas.py
+
+# Run specific test function
+pytest tests/integration/test_auth_api.py::test_login_success
+
+# Run with coverage
+pytest --cov=app --cov-report=term-missing tests/
+
+# Run only unit tests (fast)
+pytest tests/unit/
+
+# Run only integration tests
+pytest tests/integration/
+
+# Run with specific marker (when markers are defined)
+pytest -m "not slow"
+
+# Run in parallel (requires pytest-xdist)
+pytest -n auto
+
+# Run with custom timeout (prevents hanging tests)
+pytest --timeout=30
+```
+
+### Frontend
+
+```bash
+# Run Jest tests
+npm test
+
+# Run Jest with watch mode
+npm test -- --watch
+
+# Run Jest with coverage
+npm test -- --coverage
+
+# Run E2E tests
+npm run test:e2e
+
+# Run E2E tests in headed mode
+npx playwright test --headed
+
+# Run E2E tests for specific browser
+npx playwright test --project=chromium
+```
+
+---
+
+## Testing Checklist
+
+### Before Submitting PR
+
+- [ ] All new code has corresponding tests
+- [ ] Unit tests pass: `pytest tests/unit/`
+- [ ] Integration tests pass: `pytest tests/integration/`
+- [ ] Coverage maintained above target (80%+)
+- [ ] No test fixtures leaked between tests (rollback verified)
+- [ ] Async patterns properly await
+- [ ] Mock fixtures correctly patch external services
+
+### Test Isolation
+
+**Ensure Tests are Hermetic**:
+- No shared test data between tests
+- Database rollback after each test
+- Fixtures are function-scoped (not module/session)
+- Mock patches cleaned up via context manager
+- No reliance on test execution order
+- Environment variables reset after tests
+
+### Debugging Tests
+
+```bash
+# Run test with print output visible
+pytest -s tests/unit/test_schemas.py
+
+# Run with full traceback
+pytest --tb=long tests/integration/test_auth_api.py
+
+# Run with pdb debugger on failure
+pytest --pdb tests/unit/test_services.py
+
+# Run with print debugging in async tests
+pytest -s -v tests/integration/test_books_api.py
+```
+
+---
+
+## CI/CD Testing
+
+**Recommended CI Configuration**:
+```yaml
+# Example GitHub Actions workflow
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+      redis:
+        image: redis:7
+    
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
+      - run: pip install -r requirements.txt
+      - run: pytest --cov=app tests/
+      - run: black --check app/ tests/
+      - run: isort --check-only app/ tests/
+      - run: flake8 app/ tests/
+      - run: mypy app/
+```
+
+---
+
+## Coverage Reports
+
+**Generate HTML Coverage Report**:
+```bash
+pytest --cov=app --cov-report=html tests/
+open htmlcov/index.html
+```
+
+**Expected Report Contents**:
+- Overall coverage percentage (target: 80%+)
+- Per-module coverage breakdown
+- Missing lines highlighted
+- Excluded lines (type-checking, stubs)
+
+---
+
+## Test Maintenance
+
+### Regular Tasks
+
+1. **Update fixtures** when models change
+2. **Review coverage** monthly for gaps
+3. **Refactor tests** to reduce duplication
+4. **Remove obsolete tests** when features retire
+5. **Update mocks** when external APIs change
+
+### Common Issues & Solutions
+
+| Issue | Solution |
+|-------|----------|
+| **Flaky async tests** | Add `await` explicitly, check race conditions |
+| **Fixture not found** | Verify scope (session vs function), check import |
+| **Database transaction timeout** | Increase timeout in `conftest.py` |
+| **Mock not working** | Check patch path is correct, use `autospec=True` |
+| **Coverage gaps** | Add unit test for uncovered logic, review exclusions |
+
+---
+
+## Summary
+
+Books4All implements a **multi-layered testing strategy**:
+
+1. **Unit Tests** - Fast, isolated, comprehensive coverage of business logic
+2. **Integration Tests** - API endpoints, database interactions, error scenarios
+3. **Fixtures & Factories** - Reusable, hermetic test data setup
+4. **Mocking** - External services (Stripe, Redis, OAuth) fully mocked
+5. **Coverage** - 80%+ target with automated reporting
+6. **Frontend** - Jest + Playwright framework configured, ready for expansion
+
+The testing infrastructure prioritizes:
+- **Isolation** - Each test is independent, no side effects
+- **Speed** - Unit tests fast (<100ms), integration tests under 1s
+- **Clarity** - Descriptive test names, clear assertions
+- **Maintainability** - DRY fixtures, reusable factories
+- **Reliability** - Async-safe, proper mocking, no flakiness
+

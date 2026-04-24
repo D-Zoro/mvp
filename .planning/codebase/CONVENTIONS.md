@@ -1,745 +1,517 @@
-# Books4All — Code Conventions & Patterns
+# Code Conventions - Books4All
 
-**Last Updated:** 2026-04-18  
-**Scope:** Backend (FastAPI/Python), Frontend (Next.js/TypeScript)
-
----
-
-## Overview
-
-This document captures the architectural patterns, naming conventions, error handling strategies, and style guidelines used throughout the Books4All codebase. All new code should follow these conventions to maintain consistency and cohesion.
+This document outlines the coding standards, style conventions, and architectural patterns used in the Books4All project.
 
 ---
 
-## Backend (FastAPI / Python)
+## Project Overview
+
+**Books4All** is a peer-to-peer used-book marketplace with:
+- **Backend**: FastAPI (Python 3.12) with async/await patterns
+- **Frontend**: Next.js 16 (React 19) with TypeScript
+- **Database**: PostgreSQL 16+ with async SQLAlchemy ORM
+- **Cache/Queue**: Redis 7+ for rate limiting and session management
+- **Payments**: Stripe integration
+
+---
+
+## Python Backend Conventions
 
 ### Project Structure
 
 ```
 backend/
 ├── app/
-│   ├── api/v1/endpoints/        # FastAPI route handlers (auth, books, orders, etc.)
-│   ├── core/                    # Infrastructure: config, database, security, dependencies
-│   ├── models/                  # SQLAlchemy ORM models
-│   ├── repositories/            # Async data-access layer
-│   ├── schemas/                 # Pydantic v2 request/response schemas
-│   ├── services/                # Business logic (auth, book, order, payment)
-│   └── main.py                  # FastAPI app entry point + exception handlers
-├── alembic/                     # Database migrations
+│   ├── api/v1/
+│   │   ├── endpoints/      # Route handlers (endpoint modules)
+│   │   └── router.py       # Route aggregation
+│   ├── core/
+│   │   ├── config.py       # Pydantic settings (env variables)
+│   │   ├── database.py     # SQLAlchemy async engine/session
+│   │   ├── dependencies.py # FastAPI dependency injection
+│   │   ├── rate_limiter.py # Redis-based rate limiting
+│   │   └── security.py     # JWT, password hashing, token utilities
+│   ├── models/             # SQLAlchemy ORM models
+│   ├── schemas/            # Pydantic request/response schemas
+│   ├── repositories/       # Data access layer (CRUD)
+│   ├── services/           # Business logic layer
+│   │   ├── exceptions.py   # Custom service exceptions
+│   │   └── *.py            # Feature-specific services
+│   ├── main.py             # FastAPI app entry point
+│   └── __init__.py
 ├── tests/
-│   ├── unit/                    # Pure Python tests (no DB, no HTTP)
-│   ├── DB/                      # ORM/constraint tests (real DB, rollback)
-│   └── integration/             # API tests (AsyncClient + real DB)
-└── pyproject.toml
+│   ├── conftest.py         # Pytest fixtures
+│   ├── unit/               # Fast, synchronous tests
+│   ├── integration/        # API + DB tests (async)
+│   └── DB/                 # Database-specific fixtures
+├── alembic/                # Database migrations
+├── pyproject.toml          # Project metadata & tool config
+└── Dockerfile              # Container image
 ```
-
-### Code Organization Principles
-
-1. **Three-layer architecture**: Endpoints → Services → Repositories
-   - **Endpoints** handle HTTP request/response mapping only
-   - **Services** contain all business logic and raise typed exceptions
-   - **Repositories** provide async SQLAlchemy queries with clean interfaces
-
-2. **Dependency Injection**: FastAPI's `Depends()` injects:
-   - `AsyncSession` (database)
-   - `ActiveUser` (authenticated user with JWT verification)
-   - Role-based dependencies: `RequireBuyer`, `RequireSeller`, `RequireAdmin`
-
-3. **Session ownership**: The endpoint owns the database session's unit-of-work boundary
-   - Services receive an `AsyncSession` parameter
-   - Services call `await self.db.commit()` before returning
-   - Repositories use `await self.db.flush()` (not commit) to keep transactions under service control
-
-4. **No ORM objects in responses**: Always convert to Pydantic schemas
-   ```python
-   # ✗ Wrong: return User ORM object
-   async def get_profile(current_user: ActiveUser) -> User:
-       return current_user
-   
-   # ✓ Right: return Pydantic schema
-   async def get_profile(current_user: ActiveUser) -> UserResponse:
-       return UserResponse.model_validate(current_user)
-   ```
 
 ### Naming Conventions
 
-#### File & Module Names
-- Snake case: `auth_service.py`, `user_repository.py`, `test_auth_api.py`
-- Match class name to module: `UserService` in `user_service.py`
-- Repository modules: `{model}_repository.py` (e.g., `book_repository.py`)
-- Endpoints: `{resource}.py` (e.g., `auth.py`, `books.py`)
+**File & Module Names**
+- Use `snake_case` for all Python files and modules
+- Module names are descriptive and singular (e.g., `user.py`, `book_service.py`, not `users.py`)
+- Test files follow `test_*.py` pattern
 
-#### Class Names
-- PascalCase: `UserService`, `BookRepository`, `AuthRequest`
-- Enums: `UserRole`, `OrderStatus`, `BookCondition`
-- Exception classes: `UserNotFoundError`, `InvalidCredentialsError` (suffix with `Error`)
+**Classes & Types**
+- Use `PascalCase` for classes (ORM models, Pydantic schemas, services)
+- Enums use `PascalCase` (e.g., `UserRole`, `BookCondition`, `OAuthProvider`)
+- Enum values use `UPPER_CASE` for constants, or `snake_case` for string enums
 
-#### Function/Method Names
-- Snake case: `create_user()`, `get_by_email()`, `update_password()`
-- Async functions: same snake case (no special prefix)
-- Private methods/functions: prefix with `_`: `_map_auth_exception()`, `_assert_valid_transition()`
-- Helpers: clear verb-noun pattern: `build_token_response()`, `verify_email()`
+**Variables & Functions**
+- Use `snake_case` for function/method and variable names
+- Private methods: prefix with single underscore `_method_name()`
+- Type-hinting constants: use `UPPER_CASE`
 
-#### Variable Names
-- Snake case: `user_id`, `book_title`, `order_status`
-- Boolean variables: prefix with `is_`, `has_`, `can_`: `is_active`, `has_stock`, `can_publish`
-- Constants: SCREAMING_SNAKE_CASE: `MAX_UPLOAD_SIZE`, `DEFAULT_PAGE_SIZE`
-- Type variables: PascalCase: `ModelType`, `CreateSchemaType`, `UpdateSchemaType`
-
-#### Database & Schema Naming
-- Tables (plural): `users`, `books`, `orders`, `reviews`
-- Columns (snake_case): `email`, `password_hash`, `created_at`, `is_active`
-- Foreign keys: `{table}_id`: `seller_id`, `buyer_id`, `user_id`
-- Enum column types: `{entity}_{enum}`: `user_role`, `order_status`
-
-### Error Handling
-
-#### Exception Hierarchy
-
-```python
-ServiceError (base)
-├── EmailAlreadyExistsError
-├── InvalidCredentialsError
-├── InvalidTokenError
-├── AccountInactiveError
-├── BookNotFoundError
-├── NotBookOwnerError
-├── NotSellerError
-├── OrderNotFoundError
-├── NotOrderOwnerError
-├── InsufficientStockError
-├── InvalidStatusTransitionError
-├── OrderNotCancellableError
-├── PaymentError
-├── RefundError
-└── StripeWebhookError
-```
-
-#### Exception Design Rules
-
-1. **Exceptions live in** `app/services/exceptions.py` — single source of truth
-2. **Typed exceptions, not generic ones** — catch specific types, not base `Exception`
-3. **Message in exception, not endpoint** — service includes context:
-   ```python
-   # ✓ Good: exception has message context
-   raise InsufficientStockError(
-       book_title="Python Guide",
-       available=2,
-       requested=5
-   )
-   
-   # ✗ Wrong: message left to endpoint
-   raise Exception(f"Not enough stock for {book_title}")
-   ```
-
-4. **Endpoints catch and map to HTTP** — global exception handlers convert to status codes:
-   ```python
-   # In app/main.py:
-   _SERVICE_EXCEPTION_MAP: dict[type[ServiceError], int] = {
-       EmailAlreadyExistsError: status.HTTP_409_CONFLICT,
-       InvalidCredentialsError: status.HTTP_401_UNAUTHORIZED,
-       BookNotFoundError: status.HTTP_404_NOT_FOUND,
-       # ... etc
-   }
-   ```
-
-5. **Prevent enumeration attacks** — same error for "not found" and "invalid password":
-   ```python
-   # ✓ Good: same error for both cases
-   if user is None or not verify_password(password, user.password_hash):
-       raise InvalidCredentialsError("Invalid email or password.")
-   
-   # ✗ Wrong: reveals whether email exists
-   if user is None:
-       raise InvalidCredentialsError("Email not found.")
-   if not verify_password(password, user.password_hash):
-       raise InvalidCredentialsError("Password incorrect.")
-   ```
-
-### Type Hints
-
-- **Mandatory on all function signatures** — no `Any` in public APIs
-- Use standard library types: `list[T]`, `dict[K, V]`, `Optional[T]`
-- Use `Union` for multiple specific types (not `Any`)
-- Async functions: return type applies to the awaited value, not `Coroutine`
-  ```python
-  # ✓ Right: return type is what you get when you await
-  async def get_user(user_id: UUID) -> Optional[User]:
-      # ... not -> Coroutine[Any, Any, Optional[User]]
-  ```
-- Generator returns: `AsyncGenerator[T, None]` for async context managers
-  ```python
-  async def get_db() -> AsyncGenerator[AsyncSession, None]:
-      async with async_session_maker() as session:
-          try:
-              yield session
-          finally:
-              await session.close()
-  ```
-
-### Docstrings
-
-- **Google-style docstrings** on all public methods in services and repositories
-- Include `Args:`, `Returns:`, `Raises:` sections
-- Example:
-  ```python
-  async def register(
-      self,
-      *,
-      email: str,
-      password: str,
-      role: UserRole = UserRole.BUYER,
-  ) -> AuthResponse:
-      """
-      Register a new user with email and password.
-
-      Args:
-          email: User email address.
-          password: Plain-text password (validated by schema before reaching here).
-          role: Role to assign (buyer or seller — admin cannot self-register).
-
-      Returns:
-          AuthResponse with tokens and user info.
-
-      Raises:
-          EmailAlreadyExistsError: If the email is already taken.
-      """
-  ```
+**Database & ORM**
+- Model class names are singular (`User`, `Book`, `Order`)
+- Database table names are plural (auto-generated by SQLAlchemy from model names)
+- Foreign key columns follow `{model}_id` pattern (e.g., `seller_id`, `user_id`)
 
 ### Code Style
 
-#### Formatting
-- **Line length:** 88 characters (Black default)
-- **Formatter:** Black
-- **Import sorter:** isort (profile=black)
-- **Linter:** flake8
+**Formatting Tool: Black**
+- Line length: 88 characters (Black default)
+- Installed as: `black==23.12.1`
+- Applied to all source and test files
 
-#### Import Organization
-```python
-# 1. Standard library
-import logging
-from datetime import datetime
-from typing import Optional
-from uuid import UUID
+**Import Sorting: isort**
+- Version: `5.13.2`
+- Sorts imports into three groups: stdlib, third-party, local
+- Configuration integrated with Black
 
-# 2. Third-party (FastAPI, SQLAlchemy, etc.)
-import httpx
-from fastapi import APIRouter, Depends
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+**Linting: Flake8**
+- Version: `7.0.0`
+- Enforces PEP 8 compliance
+- Detects unused imports, undefined names, complexity issues
 
-# 3. Local app imports
-from app.core.config import settings
-from app.core.security import verify_access_token
-from app.models.user import User
-from app.repositories.user import UserRepository
-from app.schemas.user import UserResponse
-from app.services.exceptions import InvalidTokenError
-```
+**Type Checking: Mypy**
+- Version: `1.8.0`
+- Configured in `pyrightconfig.json` with basic type checking mode
+- Python version: 3.12
+- Validates type annotations across the codebase
 
-#### Spacing & Formatting
-- Two blank lines between top-level functions/classes
-- One blank line between methods in a class
-- No blank lines after imports
-- Trailing commas in multi-line structures
+### Python Code Style Rules
 
-#### Comments & Logging
-- **Docstrings**, not inline comments, for explaining "why"
-- Use `logger.info()`, `logger.warning()`, `logger.exception()` — never `print()`
-- Log at INFO level for important business events (login, registration, payments)
-- Log at WARNING level for recoverable errors
-- Include context in logs: user IDs, resource IDs, status changes
+1. **Import Order**
+   - Standard library imports first
+   - Third-party imports second
+   - Local imports last
+   - Separated by blank lines
 
-#### Conditional Assertions
-- Use comments for guards/preconditions:
-  ```python
-  # Guard: duplicate email
-  if await self.user_repo.email_exists(email):
-      raise EmailAlreadyExistsError(...)
-  
-  # Deliberate: same error for "not found" and "wrong password"
-  if user is None or not verify_password(password, user.password_hash):
-      raise InvalidCredentialsError(...)
-  ```
+2. **Type Annotations**
+   - All function signatures must have return type hints
+   - Use `Optional[T]` for nullable values
+   - Use `Union[A, B]` for multiple types
+   - Use `|` operator for unions (Python 3.10+): `A | B`
+   - Generic types: `dict[str, Any]`, `list[Model]`
 
-#### Sections & Dividers
-- Use dividers for major section boundaries:
-  ```python
-  # ─────────────────────────────────────────────
-  # Registration
-  # ─────────────────────────────────────────────
-  
-  async def register(...) -> AuthResponse:
-      ...
-  
-  # ─────────────────────────────────────────────
-  # Login
-  # ─────────────────────────────────────────────
-  ```
+3. **Docstrings**
+   - Use triple-quoted docstrings for modules, classes, and public functions
+   - Follow Google-style format for consistency
+   - Include brief description, args, returns, raises
 
-### SQLAlchemy / Async Patterns
+4. **Error Handling**
+   - Create custom exception classes inheriting from `ServiceError`
+   - Use typed exception handling (never bare `except:`)
+   - Log exceptions at appropriate levels (warning, error)
 
-#### Async Session Usage
-- Always `await session.execute(...)` — never `.execute(...)`
-- Use `AsyncSession` from `sqlalchemy.ext.asyncio`
-- Never use sync driver (`psycopg2`) for app code (only Alembic: `SYNC_DATABASE_URL`)
+5. **Async/Await**
+   - All database operations use async SQLAlchemy (`AsyncSession`)
+   - FastAPI route handlers are async functions (`async def`)
+   - Use `await` for I/O-bound operations
+   - Services may be sync or async depending on I/O needs
 
-#### Query Building
-```python
-# ✓ Good: use select() with type hints
-from sqlalchemy import select
+### Pattern: Layered Architecture
 
-query = select(User).where(User.email == email)
-result = await session.execute(query)
-user = result.scalar_one_or_none()
+**Models** (`app/models/`)
+- SQLAlchemy ORM classes with `Base` inheritance
+- Define table structure, relationships, validation via SQLAlchemy columns
+- Example: `User`, `Book`, `Order`, `Review`
 
-# ✗ Wrong: legacy string queries or missing await
-result = session.execute("SELECT * FROM users WHERE email = ?", [email])
-```
+**Schemas** (`app/schemas/`)
+- Pydantic models for request/response validation
+- Separate Create/Read/Update schemas when needed
+- Reusable field definitions via inheritance
+- Example: `UserCreate`, `UserResponse`, `BookUpdate`
 
-#### Flushing vs. Committing
-- **Repositories**: use `await db.flush()` to keep transaction control with the service
-- **Services**: call `await db.commit()` after completing business logic
-- **Endpoints**: don't call commit/flush — it's the service's responsibility
+**Repositories** (`app/repositories/`)
+- Generic `BaseRepository[Model, CreateSchema, UpdateSchema]`
+- Implement domain-specific queries (e.g., `UserRepository.get_by_email()`)
+- Handle ORM session management; services call repositories
+- Example: `UserRepository`, `BookRepository`, `OrderRepository`
+
+**Services** (`app/services/`)
+- Business logic and validation
+- Call repositories for data access
+- Raise custom exceptions (not HTTP errors)
+- Example: `AuthService`, `BookService`, `OrderService`, `PaymentService`
+
+**API Endpoints** (`app/api/v1/endpoints/`)
+- FastAPI route handlers with dependency injection
+- Call services for business logic
+- Return Pydantic schemas
+- Handle HTTP-level concerns (status codes, exceptions)
+- Grouped by domain (auth, books, orders, reviews, payments)
+
+### Dependency Injection (FastAPI)
 
 ```python
-# In repository:
-async def create_user(...) -> User:
-    user = User(...)
-    db.add(user)
-    await db.flush()  # ← not commit!
-    await db.refresh(user)
-    return user
+from fastapi import Depends
+from app.core.dependencies import get_db
 
-# In service:
-async def register(...) -> AuthResponse:
-    user = await self.user_repo.create_user(...)
-    await self.db.commit()  # ← service commits
-    await self.db.refresh(user)
-    return _build_token_response(user)
+@app.get("/books")
+async def list_books(db: AsyncSession = Depends(get_db)):
+    # db is the injected session
+    ...
 ```
 
-#### Models: Mapped Column Syntax
-- Use `Mapped` with `mapped_column()` (SQLAlchemy 2.0 style):
-  ```python
-  from sqlalchemy.orm import Mapped, mapped_column
-  
-  class User(Base):
-      id: Mapped[UUID] = mapped_column(
-          UUID(as_uuid=True),
-          primary_key=True,
-          default=uuid.uuid4,
-          doc="Unique identifier"
-      )
-      email: Mapped[str] = mapped_column(
-          String(255),
-          unique=True,
-          nullable=False,
-          index=True
-      )
-  ```
+### Error Handling: Service Exceptions
 
-#### Relationships
-- Always specify `back_populates` on both sides
-- Lazy loading: `lazy="dynamic"` for list relationships (don't load by default)
-- Use `TYPE_CHECKING` for forward references in circular dependencies:
-  ```python
-  from typing import TYPE_CHECKING
-  
-  if TYPE_CHECKING:
-      from app.models.book import Book
-  
-  class User(Base):
-      books: Mapped[list["Book"]] = relationship("Book", back_populates="seller")
-  ```
+Custom exceptions inherit from `ServiceError` base class and are mapped to HTTP status codes in `main.py`:
 
-### Pydantic v2 Schemas
-
-#### BaseSchema Configuration
 ```python
-class BaseSchema(BaseModel):
-    model_config = ConfigDict(
-        from_attributes=True,        # Enable ORM mode
-        populate_by_name=True,       # Allow field name or alias
-        str_strip_whitespace=True,   # Auto-trim strings
-        validate_assignment=True,    # Validate on assignment
-        use_enum_values=True,        # Use enum values (not objects)
-    )
+# app/services/exceptions.py
+class ServiceError(Exception):
+    """Base service exception."""
+    pass
+
+class BookNotFoundError(ServiceError):
+    pass
+
+class InsufficientStockError(ServiceError):
+    pass
+
+# main.py - Exception mapping
+_SERVICE_EXCEPTION_MAP: dict[type[ServiceError], int] = {
+    BookNotFoundError:      status.HTTP_404_NOT_FOUND,
+    InsufficientStockError: status.HTTP_409_CONFLICT,
+    # ... more mappings
+}
 ```
-
-#### Request vs. Response
-- **Request schemas** (Create, Update): inherits from `BaseSchema`
-- **Response schemas**: inherits from `ResponseSchema` (includes ID + timestamps)
-- Example:
-  ```python
-  class BookCreate(BaseSchema):
-      title: str
-      author: str
-      price: float
-  
-  class BookResponse(ResponseSchema):
-      title: str
-      author: str
-      price: float
-      seller_id: UUID
-  ```
-
-#### Field Validation
-- Use Pydantic validators for complex validation:
-  ```python
-  from pydantic import field_validator
-  
-  class PasswordInput(BaseSchema):
-      password: str
-      
-      @field_validator('password')
-      @classmethod
-      def validate_password(cls, v: str) -> str:
-          if len(v) < 8:
-              raise ValueError('Password must be at least 8 characters')
-          return v
-  ```
 
 ---
 
-## Frontend (Next.js / TypeScript)
+## TypeScript/JavaScript Frontend Conventions
 
 ### Project Structure
 
 ```
 frontend/
-├── app/                         # Next.js App Router pages
-│   ├── (auth)/                  # Route group for auth pages
-│   ├── (marketplace)/           # Route group for public pages
-│   ├── seller/                  # Seller dashboard
-│   ├── buyer/                   # Buyer dashboard
-│   └── layout.tsx
-├── components/
-│   ├── ui/                      # Reusable UI components (Button, Input, etc.)
-│   └── features/                # Feature-specific components
-├── lib/
-│   ├── api/                     # API client functions
-│   ├── hooks/                   # React hooks (useAuth, useCart, etc.)
-│   ├── types/                   # TypeScript type definitions
-│   └── utils/                   # Utility functions
-├── styles/
-│   └── globals.css              # Tailwind CSS + custom styles
-└── tailwind.config.ts
+├── app/                    # Next.js App Router
+│   ├── (app)/             # Authenticated routes
+│   ├── (auth)/            # Public auth routes
+│   └── layout.tsx         # Root layout
+├── src/
+│   ├── components/        # React components
+│   │   ├── ui/            # Shadcn/ui components
+│   │   ├── auth/          # Auth-related components
+│   │   └── *.tsx          # Feature-specific components
+│   ├── lib/
+│   │   ├── api/           # API client & endpoints
+│   │   ├── hooks/         # Custom React hooks
+│   │   ├── auth/          # Auth utilities
+│   │   └── utils.ts       # Helper utilities
+│   ├── store/             # Zustand state management
+│   ├── types/             # TypeScript type definitions
+│   └── styles/            # Global styles
+├── public/                # Static assets
+├── tsconfig.json          # TypeScript config
+├── next.config.js         # Next.js config
+├── eslint.config.mjs      # ESLint config
+└── package.json           # Dependencies
 ```
 
 ### Naming Conventions
 
-#### File & Folder Names
-- Components: PascalCase: `UserProfile.tsx`, `BookCard.tsx`
-- Pages: lowercase with hyphens: `[id].tsx`, `my-listings.tsx`
-- Hooks: PascalCase prefixed with `use`: `useAuth.ts`, `useCart.ts`
-- API functions: snake_case: `books.ts`, `orders.ts`, `auth.ts`
-- Types: snake_case: `user.ts`, `book.ts`, `order.ts`
-- Utils: snake_case: `formatPrice.ts`, `parseDate.ts`
+**File & Module Names**
+- Use `camelCase` for utility files (e.g., `tokenStorage.ts`, `utils.ts`)
+- Use `PascalCase` for component files (e.g., `AuthGuard.tsx`, `UserProfile.tsx`)
+- Hooks use `camelCase` (e.g., `useAuth.ts`, `useBooks.ts`)
+- API modules use `camelCase` (e.g., `client.ts`, `auth.ts`, `books.ts`)
 
-#### Variable & Function Names
-- React components: PascalCase: `const BookCard = (props) => { ... }`
-- Props interfaces: `{ComponentName}Props`: `interface BookCardProps { ... }`
-- Event handlers: prefix with `handle` or `on`: `handleSubmit()`, `onClose()`
-- Custom hooks: `use{FeatureName}`: `useAuth()`, `useBookList()`
-- Helper functions: camelCase verb-noun: `formatPrice()`, `parseDate()`, `truncateText()`
+**Components**
+- Use `PascalCase` for React component names
+- Props interfaces: `{ComponentName}Props`
+- Examples: `AuthGuard.tsx`, `BookCard.tsx`, `OrderForm.tsx`
 
-#### Type Names
-- Interfaces: PascalCase: `User`, `Book`, `Order`, `AuthResponse`
-- Types: PascalCase: `BookCondition`, `OrderStatus`
-- Enums: PascalCase: `UserRole`, `BookStatus`
+**Variables & Functions**
+- Use `camelCase` for variables and function names
+- Private/internal functions: prefix with underscore `_privateFunc()`
+- Constants: `UPPER_SNAKE_CASE` (e.g., `API_PREFIX`, `BASE_URL`)
 
-### TypeScript Conventions
+**State Management**
+- Zustand stores use `PascalCase` for store names (e.g., `AuthStore`, `BookStore`)
+- Store hook files use `camelCase` (e.g., `authStore.ts`)
 
-#### Strict Mode
-- All files in strict TypeScript mode (no `any` without justification)
-- Always provide return types on functions:
-  ```typescript
-  // ✓ Good
-  function getBooks(pageSize: number): Promise<Book[]> {
-    // ...
-  }
-  
-  // ✗ Wrong: no return type
-  function getBooks(pageSize: number) {
-    // ...
-  }
-  ```
+### Code Style
 
-#### Type Definitions
-- Keep types in `lib/types/` organized by domain:
-  ```
-  lib/types/
-  ├── user.ts       # User, UserRole, UserResponse
-  ├── book.ts       # Book, BookCondition, BookResponse
-  ├── order.ts      # Order, OrderStatus, OrderResponse
-  └── auth.ts       # AuthResponse, LoginRequest, etc.
-  ```
+**Formatting Tool: Prettier (via Next.js)**
+- Configured implicitly via ESLint Next.js config
+- Installed: `@tailwindcss/postcss` for style formatting
 
-- Export all types from a barrel file:
-  ```typescript
-  // lib/types/index.ts
-  export type { User, UserRole } from './user';
-  export type { Book, BookCondition } from './book';
-  export type { Order, OrderStatus } from './order';
-  ```
+**Linting: ESLint with Next.js Config**
+- Version: `^9` (latest)
+- Extends: `eslint-config-next/core-web-vitals` and `eslint-config-next/typescript`
+- Enforces Next.js best practices and React standards
 
-#### Component Patterns
+**Type Checking: TypeScript**
+- Version: `^5`
+- `strict: true` - Strict type checking enabled
+- `noImplicitOverride: true` - Force explicit override in inheritance
+- `noUncheckedIndexedAccess: true` - Prevent unsound indexed access
+- `exactOptionalPropertyTypes: true` - Strict optional property handling
+- Path aliases configured for clean imports (e.g., `@/components/*`)
 
-**Functional Components with Props Interface:**
-```typescript
-interface BookCardProps {
-  book: Book;
-  onSelect?: (id: string) => void;
-}
+### TypeScript Code Style Rules
 
-export default function BookCard({ book, onSelect }: BookCardProps) {
-  return <div onClick={() => onSelect?.(book.id)}>{book.title}</div>;
-}
-```
+1. **Type Definitions**
+   - All React props must have `Props` interface
+   - Use `interface` for object shapes (preferred over `type`)
+   - Use `type` for unions and primitives
+   - Example:
+     ```typescript
+     interface BookCardProps {
+       id: string;
+       title: string;
+       price: number;
+     }
 
-**Client Components:**
-- Always use `"use client"` at the top for interactive components
-- Separate from server components in the same folder if needed
+     export function BookCard({ id, title, price }: BookCardProps) {
+       return <div>{title}</div>;
+     }
+     ```
 
-**Props Destructuring:**
-```typescript
-// ✓ Good: destructure with type
-function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  // ...
-}
+2. **Import Organization**
+   - External imports first (React, libraries)
+   - Relative imports last (@/ aliases)
+   - Grouped by category with blank lines
 
-// Also good: use Props interface
-interface SidebarProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
+3. **Component Patterns**
+   - Use functional components exclusively
+   - Use `"use client"` directive for client components
+   - Hooks can only be used in client components
+   - Pass props via destructuring in function signature
+   - Example:
+     ```typescript
+     "use client";
 
-function Sidebar({ isOpen, onClose }: SidebarProps) {
-  // ...
-}
-```
+     import { useState } from "react";
 
-### React & Next.js Patterns
+     interface CounterProps {
+       initial: number;
+     }
 
-#### Hooks Usage
-- Use React Query (`@tanstack/react-query`) for server state:
-  ```typescript
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['books'],
-    queryFn: () => booksApi.getBooks(),
-  });
-  ```
+     export function Counter({ initial }: CounterProps) {
+       const [count, setCount] = useState(initial);
+       return <button onClick={() => setCount(c => c + 1)}>{count}</button>;
+     }
+     ```
 
-- Use `useState` for local UI state only (form inputs, modals, etc.)
-- Use `useEffect` for side effects (watch dependencies carefully)
+4. **Hooks Usage**
+   - Custom hooks in `src/lib/hooks/`
+   - Use TanStack React Query for server state
+   - Use Zustand for client state
+   - Never call hooks conditionally or in loops
 
-#### Error Handling
-- API errors: catch and display via toast or inline error message
-  ```typescript
-  const onSubmit = async (data: LoginFormData) => {
-    try {
-      await login(data);
-      toast.success('Login successful!');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      toast.error(message);
-    }
-  };
-  ```
+5. **Error Handling**
+   - Create `ApiClientError` class for error standardization
+   - Catch and transform API errors consistently
+   - Example:
+     ```typescript
+     try {
+       await apiRequest(config);
+     } catch (error) {
+       return Promise.reject(toApiClientError(error));
+     }
+     ```
 
-#### Form Handling
-- Use React Hook Form with Zod validation:
-  ```typescript
-  import { useForm } from 'react-hook-form';
-  import { zodResolver } from '@hookform/resolvers/zod';
-  import { z } from 'zod';
+### API Client Conventions
 
-  const schema = z.object({
-    email: z.string().email('Invalid email'),
-    password: z.string().min(8, 'Too short'),
-  });
+**Client Setup** (`src/lib/api/client.ts`)
+- Axios instance with base URL and interceptors
+- Request interceptor: Injects bearer token from Zustand store
+- Response interceptor: Handles 401 with token refresh
+- Token refresh: Queued to prevent concurrent refresh calls
 
-  type FormData = z.infer<typeof schema>;
+**API Endpoints** (`src/lib/api/*.ts`)
+- Separate file per domain (auth, books, orders, etc.)
+- Export async functions (not methods)
+- Use `apiRequest()` wrapper for type-safe calls
+- Handle both success and error responses
 
-  function LoginForm() {
-    const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
-      resolver: zodResolver(schema),
-    });
+**Types** (`src/lib/api/types.ts`)
+- Request/Response interfaces
+- Error response structure with field-level details
+- Shared across all API modules
 
-    return (
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <input {...register('email')} />
-        {errors.email && <p>{errors.email.message}</p>}
-      </form>
-    );
-  }
-  ```
+### State Management: Zustand
 
-#### State Management (if needed)
-- Keep it minimal — React Query handles most server state
-- Zustand or Context API for global UI state (theme, user session, cart)
-- Avoid Redux-style complexity
-
-### Styling
-
-#### Tailwind CSS
-- Use Tailwind utility classes — avoid custom CSS when possible
-- Responsive classes: `sm:`, `md:`, `lg:`, `xl:`, `2xl:`
-- Dark mode support: `dark:` prefix
-
-#### Custom CSS
-- Keep in `styles/globals.css` or component module
-- Use CSS custom properties for theme colors (coordinated with backend colors)
-- Example color variables:
-  ```css
-  :root {
-    --primary: #6366f1;
-    --primary-container: #eef2ff;
-    --on-primary: #ffffff;
-    --surface: #fafafa;
-    --surface-container-low: #f5f5f5;
-    --on-surface: #1a1a1a;
-    --outline: #999999;
-    --error: #d32f2f;
-  }
-  ```
-
-#### Component-Level Styles
-- Avoid inline `style={}` — use Tailwind or CSS modules
-- For complex conditional styles, build className strings:
-  ```typescript
-  const buttonClass = cn(
-    'px-4 py-2 rounded-lg font-semibold transition-colors',
-    isLoading && 'opacity-50 cursor-not-allowed',
-    isError && 'bg-error text-white',
-    !isError && 'bg-primary text-white hover:bg-primary/90',
-  );
-  ```
-
-### API Integration
-
-#### API Client Functions
-- Keep in `lib/api/{resource}.ts`
-- One file per domain (books, orders, auth, etc.)
-- Use fetch or axios (whichever is configured)
+**Store Pattern** (`src/store/*.ts`)
+- Single store per domain (AuthStore, BookStore, etc.)
+- Synchronous state updates (mutations)
+- Use store hooks to access state in components
 - Example:
   ```typescript
-  // lib/api/books.ts
-  export async function getBooks(page?: number): Promise<Book[]> {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/v1/books?page=${page || 1}`
-    );
-    if (!res.ok) throw new Error('Failed to fetch books');
-    return res.json();
+  import { create } from "zustand";
+
+  interface AuthStore {
+    accessToken: string | null;
+    user: User | null;
+    setTokens: (tokens: { accessToken: string; refreshToken: string }) => void;
+    clearAuth: () => void;
   }
 
-  export async function getBook(id: string): Promise<Book> {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/v1/books/${id}`
-    );
-    if (!res.ok) throw new Error('Book not found');
-    return res.json();
-  }
+  export const useAuthStore = create<AuthStore>((set) => ({
+    accessToken: null,
+    user: null,
+    setTokens: (tokens) => set({ accessToken: tokens.accessToken }),
+    clearAuth: () => set({ accessToken: null, user: null }),
+  }));
   ```
 
-#### Authentication
-- Store JWT in HTTP-only cookie or secure storage
-- Add auth token to request headers in API layer:
+### React Query Conventions
+
+**Query Configuration**
+- Query keys: nested arrays (e.g., `["auth", "me"]`, `["books", id]`)
+- Enabled queries: conditionally enable based on dependencies
+- Retry logic: Sensible defaults with custom overrides for auth endpoints
+- Example:
   ```typescript
-  export async function createBook(book: BookCreate): Promise<Book> {
-    const token = getAuthToken(); // from storage or context
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/v1/books`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(book),
-      }
-    );
-    if (!res.ok) throw new Error('Failed to create book');
-    return res.json();
-  }
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["books", page, sort],
+    queryFn: () => getBooks({ page, sort }),
+    enabled: Boolean(page),
+  });
   ```
 
----
+### Component Best Practices
 
-## Cross-Cutting Concerns
+1. **No Default Exports**
+   - Always use named exports: `export function ComponentName() { ... }`
+   - Improves IDE refactoring and tree-shaking
 
-### Logging
+2. **Props Destructuring**
+   - Destructure in function signature
+   - Avoid accessing via `props.field`
 
-#### Backend Logging
-- Use Python's `logging` module (configured in FastAPI lifespan)
-- Log levels:
-  - `DEBUG`: verbose info for development
-  - `INFO`: important business events (login, registration, order created)
-  - `WARNING`: recoverable errors (failed email send, rate limit hit)
-  - `ERROR`: unrecoverable errors (DB connection lost)
-  - `EXCEPTION`: caught exceptions with full traceback
+3. **Accessibility**
+   - Use semantic HTML (button, input, form, etc.)
+   - Add ARIA labels where needed
+   - Use proper heading hierarchy
 
-#### Frontend Logging
-- Use `console.log()`, `console.warn()`, `console.error()` during development
-- In production, consider a logging service (e.g., Sentry)
-- Log API errors and user actions for debugging
-
-### Security
-
-#### Backend
-- **Password hashing**: bcrypt via passlib (min 72 bytes enforced)
-- **JWT tokens**: include `type` claim (`access`, `refresh`, `password_reset`)
-- **CORS**: configured in `main.py` with allowed origins
-- **Rate limiting**: Redis-backed, excludes webhooks and health checks
-- **Input validation**: Pydantic schemas for all inputs
-- **SQL injection**: parameterized queries via SQLAlchemy
-- **Secrets**: all sensitive config in environment variables (`.env`)
-
-#### Frontend
-- **Authentication**: store JWT securely (HTTP-only cookie preferred)
-- **CSRF**: handled by Next.js automatically for same-origin requests
-- **XSS**: React escapes content by default; be careful with `dangerouslySetInnerHTML`
-- **API secrets**: never expose private keys in client code
-
-### Testing
-
-#### Backend Testing
-- See [TESTING.md](./TESTING.md) for comprehensive testing conventions
-
-#### Frontend Testing
-- Unit tests: Jest + React Testing Library
-- Integration tests: end-to-end flow testing via Cypress or Playwright
-- Mock API responses in unit tests using Mock Service Worker (MSW)
+4. **Performance**
+   - Use React.memo for expensive components
+   - Use useCallback for stable function refs
+   - Use useMemo for expensive calculations
+   - Lazy load routes with Next.js dynamic imports
 
 ---
 
-## Summary Table
+## Shared Conventions
 
-| Aspect | Convention | Example |
-|--------|-----------|---------|
-| **Backend File Names** | snake_case | `auth_service.py` |
-| **Backend Classes** | PascalCase | `UserService` |
-| **Backend Methods** | snake_case | `get_by_email()` |
-| **Backend Constants** | SCREAMING_SNAKE_CASE | `MAX_UPLOAD_SIZE` |
-| **Backend Exceptions** | PascalCase + `Error` suffix | `InvalidCredentialsError` |
-| **Backend Databases** | snake_case, plural | `users`, `user_id` |
-| **Frontend Components** | PascalCase | `BookCard.tsx` |
-| **Frontend Pages** | lowercase-kebab-case | `my-listings.tsx` |
-| **Frontend Hooks** | use{Name} | `useAuth.ts` |
-| **Frontend Types** | PascalCase | `User`, `Book` |
-| **Frontend Functions** | camelCase | `formatPrice()` |
-| **Line Length** | 88 chars (Black) | N/A |
-| **Type Hints** | Required in signatures | `async def get_user(...) -> User:` |
-| **Exception Strategy** | Typed + service layer | Raise in service, catch in endpoint |
-| **Form Validation** | Zod (frontend), Pydantic (backend) | `z.object({ ... })` |
-| **Styling** | Tailwind CSS + custom CSS | `className="px-4 py-2 bg-primary"` |
+### Environment Variables
+
+**Backend** (`.env` and `pyproject.toml`)
+- `DATABASE_URL` - PostgreSQL connection string
+- `REDIS_URL` - Redis connection string
+- `JWT_SECRET_KEY` - Secret for signing tokens
+- `STRIPE_API_KEY` - Stripe API key
+- `AWS_S3_BUCKET` - S3 bucket for uploads
+- All configured via Pydantic settings in `config.py`
+
+**Frontend** (`.env.local`)
+- `NEXT_PUBLIC_API_URL` - Backend API base URL
+- `NEXT_PUBLIC_STRIPE_KEY` - Stripe publishable key
+- Prefixed with `NEXT_PUBLIC_` to expose to browser
+
+### Git Conventions
+
+**Branch Naming**
+- Feature: `feature/short-description`
+- Bugfix: `bugfix/short-description`
+- Hotfix: `hotfix/short-description`
+
+**Commit Messages**
+- Format: `type(scope): description`
+- Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
+- Example: `feat(auth): add OAuth Google integration`
 
 ---
 
-## See Also
+## Tool Versions & Configuration
 
-- [TESTING.md](./TESTING.md) — Testing framework, structure, and best practices
-- `CLAUDE.md` — Project-specific context and known gotchas
-- `pyproject.toml` — Backend dependencies and tool configuration
-- `backend/app/main.py` — Global exception handlers and middleware
+| Tool | Version | Purpose |
+|------|---------|---------|
+| **Python** | 3.12 | Language runtime |
+| **Black** | 23.12.1 | Code formatting |
+| **isort** | 5.13.2 | Import sorting |
+| **Flake8** | 7.0.0 | Linting |
+| **Mypy** | 1.8.0 | Type checking |
+| **Pytest** | 7.4.4 | Testing framework |
+| **Node.js** | 18+ | JavaScript runtime |
+| **TypeScript** | ^5 | Type-safe JavaScript |
+| **ESLint** | ^9 | JavaScript linting |
+| **Next.js** | 16.0.7 | React framework |
+
+---
+
+## File Size Guidelines
+
+- **Python modules**: Keep under 500 lines of code
+- **Components**: Keep under 300 lines of code
+- **Services**: Keep under 400 lines of code
+- Split large files into smaller, focused modules
+
+---
+
+## Documentation Standards
+
+1. **Module Docstrings**
+   ```python
+   """
+   Short one-line description.
+   
+   Longer explanation if needed.
+   """
+   ```
+
+2. **Function Docstrings**
+   ```python
+   def example_function(param1: str) -> dict:
+       """
+       Brief description.
+       
+       Longer description if needed.
+       
+       Args:
+           param1: Description of param1.
+       
+       Returns:
+           Description of return value.
+       
+       Raises:
+           ValueError: When condition X occurs.
+       """
+   ```
+
+3. **Code Comments**
+   - Use sparingly; prefer self-documenting code
+   - Explain *why*, not *what*
+   - Section comments use ASCII dividers for visual clarity
+
+---
+
+## Summary
+
+Books4All follows **clean architecture principles** with clear separation of concerns across **layers** (API, Services, Repositories, Models). The codebase emphasizes:
+
+- **Type Safety**: Full type hints in Python and TypeScript
+- **Code Quality**: Automated formatting and linting
+- **Testability**: Async-friendly test fixtures and mocking
+- **Maintainability**: Consistent naming, clear structure, self-documenting code
+- **Performance**: Async operations throughout the stack
+

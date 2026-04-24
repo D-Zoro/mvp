@@ -1,497 +1,312 @@
-# Technology Stack — Books4All
-
-**Last Updated:** 2026-04-18
+# Books4All Technology Stack
 
 ## Overview
-
-Books4All is a full-stack second-hand book marketplace built with **FastAPI + Next.js**, deployed via **Docker Compose** with **PostgreSQL + Redis** persistence, **Stripe** payments, and **MinIO** object storage.
-
----
-
-## Backend Stack
-
-### Runtime & Framework
-
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| **Python** | 3.12 | Runtime language |
-| **FastAPI** | 0.109.0 | Async web framework (ASGI) |
-| **Uvicorn** | 0.27.0 | ASGI server (auto-reload in dev) |
-| **Pydantic** | 2.5.3 | Request/response validation |
-| **Pydantic Settings** | 2.1.0 | Environment configuration management |
-
-### Database & ORM
-
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| **PostgreSQL** | 16-alpine | Primary relational database |
-| **SQLAlchemy** | 2.0.25 | Async ORM (asyncio support) |
-| **asyncpg** | 0.29.0 | PostgreSQL async driver |
-| **psycopg** | 3.3.2+ | Alternative PostgreSQL driver (binary) |
-| **Alembic** | 1.13.1 | Database migration tool |
-
-**URL Formats:**
-- **Async (app):** `postgresql+asyncpg://user:pass@host:5432/db`
-- **Sync (Alembic):** `postgresql+psycopg2://user:pass@host:5432/db`
-
-### Authentication & Security
-
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| **python-jose** | 3.3.0 | JWT encoding/decoding |
-| **passlib** | 1.7.4 | Password hashing abstraction |
-| **bcrypt** | 4.1.2 | Bcrypt password algorithm ⚠️ **Pinned at 4.1.2** |
-| **email-validator** | 2.3.0+ | Email validation |
-
-**Key Notes:**
-- JWT tokens carry `type` field: `access`, `refresh`, `password_reset`, `email_verification`
-- Bcrypt hashing rounds: configurable via `BCRYPT_ROUNDS` (default 12, range 10–14)
-- Token claims: `sub` (user_id), `role`, `type`, `exp`, `iat`, `jti` (optional)
-
-### Caching & Session Management
-
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| **Redis** | 7-alpine (container) | Cache, rate limiting, session store |
-| **redis** (Python) | 5.0.1 | Async Redis client (with hiredis) |
-| **hiredis** | 3.3.1 | C parser for Redis protocol (optional perf boost) |
-
-### Testing & Quality
-
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| **pytest** | 7.4.4 | Unit/integration test framework |
-| **pytest-asyncio** | 0.23.3 | Async test support (`asyncio_mode = "auto"`) |
-| **pytest-cov** | 4.1.0 | Coverage reporting |
-| **black** | 23.12.1 | Code formatter (line length: 88) |
-| **isort** | 5.13.2 | Import sorting (`profile=black`) |
-| **flake8** | 7.0.0 | Linting |
-| **mypy** | 1.8.0 | Static type checking |
-
-### HTTP & External Integration
-
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| **httpx** | 0.26.0 | Async HTTP client (OAuth, webhooks) |
-| **stripe** | 7.11.0 | Payment processing SDK |
-| **boto3** | 1.34.0 | AWS S3 / MinIO SDK |
-| **python-multipart** | 0.0.6 | Multipart form data parsing |
-
-### Async Runtime
-
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| **greenlet** | 3.0.3 | Threading context for SQLAlchemy async |
+Books4All is a peer-to-peer used-book marketplace built with a modern full-stack architecture: **Next.js React frontend** + **FastAPI Python backend**.
 
 ---
 
 ## Frontend Stack
 
-### Runtime & Framework
+### Framework & Runtime
+- **Next.js** 16.0.7 - React server-side rendering and static generation framework
+- **React** 19.2.0 - UI component library
+- **React DOM** 19.2.0 - React renderer for browser DOM
+- **TypeScript** 5.x - Type-safe JavaScript superset
 
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| **Node.js** | 18+ (inferred) | JavaScript runtime |
-| **TypeScript** | 5 | Type-safe JavaScript |
-| **Next.js** | 16.0.7 | React framework (App Router) |
-| **React** | 19.2.0 | UI library |
-| **React DOM** | 19.2.0 | DOM rendering |
-
-### State Management & Queries
-
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| **@tanstack/react-query** | 5.91.3 | Server state management & caching |
-| **zustand** | 5.0.12 | Lightweight client state (store) |
-| **react-hook-form** | 7.71.2 | Form state & validation |
-| **axios** | 1.13.6 | HTTP client (fallback to fetch) |
+### State Management & Forms
+- **TanStack React Query** 5.91.3 - Server state management and caching
+- **Zustand** 5.0.12 - Lightweight client state management
+- **React Hook Form** 7.71.2 - Performant form validation and submission
+- **Zod** 4.3.6 - Runtime schema validation for TypeScript
 
 ### UI & Styling
+- **Tailwind CSS** 4.x - Utility-first CSS framework
+- **Lucide React** 0.577.0 - Lightweight icon library
+- **Sonner** 2.0.7 - Toast notifications library
 
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| **Tailwind CSS** | 4 | Utility-first CSS framework |
-| **@tailwindcss/postcss** | 4 | Tailwind PostCSS plugin |
-| **lucide-react** | 0.577.0 | Icon library |
-| **sonner** | 2.0.7 | Toast notifications |
+### HTTP & API Communication
+- **Axios** 1.13.6 - Promise-based HTTP client for API requests
+- **Date-fns** 4.1.0 - Modern date utility library
 
-### Validation & Utilities
+### Testing & Quality
+- **Jest** 30.3.0 - JavaScript unit testing framework
+- **Playwright** 1.58.2 - End-to-end testing framework
+- **Testing Library (React)** 16.3.2 - React component testing utilities
+- **Testing Library (Jest DOM)** 6.9.1 - Custom Jest matchers for DOM
 
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| **zod** | 4.3.6 | Schema validation & parsing |
-| **date-fns** | 4.1.0 | Date manipulation & formatting |
+### Development Tools
+- **ESLint** 9.x - JavaScript linting
+- **ESLint Config (Next.js)** 16.0.7 - Next.js recommended rules
+- **ts-jest** 29.4.6 - TypeScript support for Jest
 
-### Development & Testing
-
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| **ESLint** | 9 | JavaScript linting |
-| **eslint-config-next** | 16.0.7 | Next.js ESLint config |
-| **Jest** | 30.3.0 | Unit test framework |
-| **@testing-library/react** | 16.3.2 | React testing utilities |
-| **@testing-library/jest-dom** | 6.9.1 | Custom matchers |
-| **@playwright/test** | 1.58.2 | End-to-end testing |
-| **ts-jest** | 29.4.6 | Jest TypeScript support |
-
-### TypeScript Configuration
-
-**Compiler Options:**
-- **Target:** ES2022
-- **Strict Mode:** Enabled (`strict: true`, `noImplicitOverride: true`, `noUncheckedIndexedAccess: true`, `exactOptionalPropertyTypes: true`)
-- **Module Resolution:** Bundler
-- **JSX:** react-jsx (no runtime import)
-
-**Path Aliases (tsconfig.json):**
-```
-@/*              → ./src/*
-@/app/*          → ./app/*
-@/components/*   → ./src/components/*
-@/lib/*          → ./src/lib/*
-@/hooks/*        → ./src/lib/hooks/*
-@/store/*        → ./src/store/*
-@/types/*        → ./src/types/*
-@/styles/*       → ./src/styles/*
-```
-
-### Next.js Configuration
-
-**Key Settings:**
-- **Strict Mode:** Enabled
-- **Powered-By Header:** Disabled (security)
-- **Compression:** Enabled
-- **Image Formats:** AVIF, WebP
-- **Cache TTL:** 60 seconds minimum
-- **Remote Image Patterns:** HTTPS only
-- **Environment Variables:** `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_STRIPE_KEY`
-
-**Security Headers (automatic):**
-- `X-Frame-Options: DENY` (clickjacking)
-- `X-Content-Type-Options: nosniff`
-- `Referrer-Policy: strict-origin-when-cross-origin`
-- `Permissions-Policy: camera=(), microphone=(), geolocation=()`
-- **CSP:** Allows self, inline scripts (Stripe), HTTPS only for external resources
+### Build Configuration
+- **next.config.js** - Strict security headers (CSP, X-Frame-Options, etc.)
+- Image optimization with modern formats (AVIF, WebP)
+- Remote image pattern support for external domains
+- Environment variable configuration for API and Stripe
 
 ---
 
-## Infrastructure & Deployment
+## Backend Stack
 
-### Containerization
+### Core Framework & Runtime
+- **Python** 3.12 - Programming language
+- **FastAPI** 0.109.0 - Modern async web framework
+- **Uvicorn** 0.27.0 - ASGI server with uvloop support
+- **Starlette** 0.35.1 - ASGI toolkit (FastAPI dependency)
 
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| **Docker** | Latest | Containerization |
-| **Docker Compose** | 3.9 | Multi-container orchestration |
+### Database & ORM
+- **SQLAlchemy** 2.0.25 - SQL toolkit and ORM with async support
+- **SQLAlchemy asyncio** - Async database access
+- **AsyncPG** 0.29.0 - Async PostgreSQL driver (high performance)
+- **Psycopg** 3.3.2 - PostgreSQL adapter (with binary support)
+- **Psycopg2-binary** 2.9.9 - Legacy PostgreSQL driver
+- **Alembic** 1.13.1 - Database migration tool
+- **Greenlet** 3.0.3 - Lightweight concurrency primitive
 
-### Database Containers
-
-| Service | Image | Ports | Storage |
-|---------|-------|-------|---------|
-| **PostgreSQL** | `postgres:16-alpine` | 5432 | `postgres_data_*` volume |
-| **Redis** | `redis:7-alpine` | 6379 | `redis_data_*` volume |
-| **MinIO** | `minio/minio:latest` | 9000 (API), 9001 (Console) | `minio_data_*` volume |
-
-### Reverse Proxy & Load Balancing
-
-| Component | Purpose |
-|-----------|---------|
-| **Nginx** | Reverse proxy, TLS termination, load balancing (prod) |
-| **Alpine Linux** | Lightweight base image for Nginx |
-
-### Package Management
-
-| Tool | Purpose |
-|------|---------|
-| **uv** | Fast Python package installer (alternative to pip) |
-| **pip** | Standard Python package manager (fallback) |
-| **npm** | Node.js package manager (frontend) |
-
-### Docker Compose Environments
-
-**Development** (`docker-compose.dev.yml`):
-- Backend: Hot reload, port 8000
-- Frontend: Optional, port 3000
-- DB/Redis/MinIO: Exposed on host ports
-- Volumes: Source-code mounts for live development
-
-**Staging** (`docker-compose.staging.yml`):
-- Closer to production configuration
-- Reduced verbosity, no source mounts
-
-**Production** (`docker-compose.prod.yml`):
-- 2 replicas each (backend, frontend)
-- Resource limits (0.5 CPU, 512 MB memory)
-- Named volumes for persistence
-- Health checks
-- Restart policies (`always`)
-
----
-
-## Python Dependencies Summary
-
-### Core Application
-```
-fastapi[all]==0.109.0
-uvicorn[standard]==0.27.0
-pydantic==2.5.3
-pydantic-settings==2.1.0
-```
-
-### Database & Async
-```
-sqlalchemy[asyncio]==2.0.25
-asyncpg==0.29.0
-psycopg[binary]>=3.3.2
-psycopg2-binary==2.9.9
-alembic==1.13.1
-greenlet==3.0.3
-```
+### Caching & Sessions
+- **Redis** 5.0.1 - In-memory data store with HiredIS optimization
+- **HiredIS** 3.3.1 - C parser for Redis protocol (performance)
 
 ### Authentication & Security
-```
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-bcrypt==4.1.2    # ⚠️ Pinned — do NOT upgrade
-email-validator>=2.3.0
-```
+- **PyJWT (python-jose)** 3.3.0 - JWT token signing and verification
+- **Cryptography** 46.0.3 - Cryptographic recipes and primitives
+- **Bcrypt** 4.1.2 - Secure password hashing
+- **Passlib[bcrypt]** 1.7.4 - Password hashing library
 
-### Caching & Background Tasks
-```
-redis[hiredis]==5.0.1
-celery>=5.6.0
-```
+### Payment Processing
+- **Stripe** 7.11.0 - Payment processing and checkout integration
+- Webhook signature verification and event handling
+- Refund processing capabilities
+- Checkout session management with Redis deduplication
 
-### Payments & Storage
-```
-stripe==7.11.0
-boto3==1.34.0
-```
+### File Storage
+- **Boto3** 1.34.0 - AWS SDK for Python
+- **Botocore** 1.34.162 - Low-level AWS API client
+- **S3Transfer** 0.9.0 - S3 file transfer utilities
+- S3/MinIO integration for image uploads
 
-### HTTP & Communication
-```
-httpx==0.26.0
-python-multipart==0.0.6
-```
+### HTTP & Request Handling
+- **Httpx** 0.26.0 - Async HTTP client
+- **Httptools** 0.7.1 - Fast HTTP request/response parsing
+- **Python-multipart** 0.0.6 - Multipart form data parsing
+- **Email-validator** 2.3.0 - Email validation
+
+### Data Validation & Serialization
+- **Pydantic** 2.5.3 - Data validation using Python type hints
+- **Pydantic Settings** 2.1.0 - Settings management with Pydantic
+- **Pydantic Extra Types** 2.10.6 - Extra Pydantic data types
+- **Pydantic Core** 2.14.6 - Core validation engine
+
+### Task Queue & Background Jobs
+- **Celery** 5.6.0 - Distributed task queue
+- **Kombu** 5.6.1 - AMQP library for Celery
+- **Billiard** 4.2.4 - Process pool implementation
+- **AMQP** 5.3.1 - Python AMQP client
+- **Vine** 5.1.0 - Event manager for Celery
+
+### Code Quality & Linting
+- **Black** 23.12.1 - Code formatter (PEP 8 compliant)
+- **Flake8** 7.0.0 - Style guide linter
+- **iSort** 5.13.2 - Import statement sorter
+- **MyPy** 1.8.0 - Static type checker
+- **Pycodestyle** 2.11.1 - PEP 8 conformance checker
+- **PyFlakes** 3.2.0 - Logical error checker
 
 ### Testing
-```
-pytest==7.4.4
-pytest-asyncio==0.23.3
-pytest-cov==4.1.0
-```
+- **Pytest** 7.4.4 - Testing framework
+- **Pytest-asyncio** 0.23.3 - Async test support
+- **Pytest-cov** 4.1.0 - Code coverage plugin
+- **Coverage** 7.13.0 - Code coverage measurement
 
-### Code Quality
-```
-black==23.12.1
-isort==5.13.2
-flake8==7.0.0
-mypy==1.8.0
-```
+### Utilities & Dependencies
+- **Python-dotenv** 1.2.1 - .env file support
+- **Click** 8.3.1 - CLI creation toolkit
+- **ORJson** 3.11.5 - Fast JSON serializer
+- **UJson** 5.11.0 - Ultra-fast JSON encoder
+- **PyYAML** 6.0.3 - YAML parser
+- **PyASN1** 0.6.1 - ASN.1 library
+- **Requests** 2.32.5 - HTTP library (synchronous)
+- **Certifi** 2025.11.12 - Mozilla CA certificate bundle
+- **Typing Extensions** 4.15.0 - Type hint backports
+- **Six** 1.17.0 - Python 2 and 3 compatibility
 
 ---
 
-## Environment Variables (Backend)
+## Database
 
-### Application
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `APP_NAME` | `Books4All` | Application name |
-| `APP_VERSION` | `1.0.0` | Version string |
-| `DEBUG` | `false` | Debug mode |
-| `ENVIRONMENT` | `development` | `development`, `staging`, `production` |
-| `API_V1_PREFIX` | `/api/v1` | API version prefix |
+### Primary Database
+- **PostgreSQL** - Primary relational database
+- Connection string: `postgresql+asyncpg://` with async driver
+- Pool configuration:
+  - **Pool Size**: 5 (configurable, min 1, max 20)
+  - **Max Overflow**: 10 (configurable, min 0, max 50)
+  - **Pool Pre-ping**: Enabled (connection verification)
 
-### Database
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | ✓ | PostgreSQL async URL (`postgresql+asyncpg://...`) |
-| `DATABASE_POOL_SIZE` | 5 | Connection pool size (1–20) |
-| `DATABASE_MAX_OVERFLOW` | 10 | Max overflow connections (0–50) |
-| `DATABASE_ECHO` | false | Log SQL queries (debug) |
+### Cache & Session Store
+- **Redis** - In-memory cache for webhooks and rate limiting
+- Default URL: `redis://localhost:6379/0`
+- Optional password authentication supported
+- Webhook deduplication with 24-hour TTL
+- Rate limiting state management
 
-### Redis
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection URL |
-| `REDIS_PASSWORD` | None | Optional password |
+---
 
-### Authentication & JWT
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SECRET_KEY` | (required) | JWT signing key (≥32 chars) |
-| `JWT_ALGORITHM` | `HS256` | JWT encoding algorithm |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | 15 | Access token TTL |
-| `REFRESH_TOKEN_EXPIRE_DAYS` | 7 | Refresh token TTL |
-| `BCRYPT_ROUNDS` | 12 | Bcrypt hashing rounds (10–14) |
+## Infrastructure
 
-### CORS
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CORS_ORIGINS` | `["http://localhost:3000"]` | Allowed CORS origins (comma-separated) |
-| `CORS_ALLOW_CREDENTIALS` | `true` | Allow credentials |
-| `CORS_ALLOW_METHODS` | `["*"]` | Allowed HTTP methods |
-| `CORS_ALLOW_HEADERS` | `["*"]` | Allowed headers |
+### Containerization
+- **Docker** - Container runtime
+- **Dockerfile** (Backend) - Multi-stage build
+  - Builder stage: Installs dependencies into wheels
+  - Production stage: Lean runtime with non-root user (uid 1001)
+  - Runs as `appuser:appgroup` (security best practice)
+  - Exposes port 8000
 
-### OAuth — Google
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `GOOGLE_CLIENT_ID` | Optional | Google OAuth app ID |
-| `GOOGLE_CLIENT_SECRET` | Optional | Google OAuth secret |
-| `GOOGLE_REDIRECT_URI` | `http://localhost:8000/api/v1/auth/google/callback` | Callback URL |
+### API Server
+- **Uvicorn** with standard HTTP server or uvloop
+- ASGI-compliant async server
+- Configurable host/port
+- Health check endpoint at `/health`
+- Metrics endpoint at `/metrics` (Prometheus format)
 
-### OAuth — GitHub
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `GITHUB_CLIENT_ID` | Optional | GitHub OAuth app ID |
-| `GITHUB_CLIENT_SECRET` | Optional | GitHub OAuth secret |
-| `GITHUB_REDIRECT_URI` | `http://localhost:8000/api/v1/auth/github/callback` | Callback URL |
+---
 
-### Rate Limiting
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RATE_LIMIT_ENABLED` | `true` | Enable rate limiting |
-| `RATE_LIMIT_DEFAULT_CALLS` | 100 | Calls per period |
-| `RATE_LIMIT_DEFAULT_PERIOD` | 60 | Period in seconds |
-| `RATE_LIMIT_LOGIN_CALLS` | 5 | Login attempts |
-| `RATE_LIMIT_LOGIN_PERIOD` | 900 | Login period (15 min) |
+## API & Configuration
 
-### File Uploads
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MAX_UPLOAD_SIZE` | 5242880 | Max upload size (5 MB) |
-| `ALLOWED_IMAGE_TYPES` | `["image/jpeg", "image/png", "image/webp"]` | MIME types |
+### API Versioning
+- **API V1 Prefix**: `/api/v1`
+- OpenAPI/Swagger docs at `/api/v1/docs`
+- ReDoc at `/api/v1/redoc`
+- OpenAPI spec at `/api/v1/openapi.json`
 
-### Stripe Payments
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `STRIPE_SECRET_KEY` | Optional | Stripe secret key (`sk_...`) |
-| `STRIPE_PUBLISHABLE_KEY` | Optional | Stripe publishable key (`pk_...`) |
-| `STRIPE_WEBHOOK_SECRET` | Optional | Webhook endpoint secret (`whsec_...`) |
+### Middleware
+- **CORS** - Configurable origin, methods, headers, credentials
+- **Rate Limiting** - Configurable calls/period
+  - Default: 100 calls per 60 seconds
+  - Login endpoint: 5 calls per 900 seconds (brute-force protection)
+  - Excludes: /health, /metrics, docs, Stripe webhooks
 
-### Object Storage (S3/MinIO)
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AWS_ENDPOINT_URL` | `http://minio:9000` | S3/MinIO endpoint |
-| `AWS_ACCESS_KEY_ID` | `minioadmin` | Access key |
-| `AWS_SECRET_ACCESS_KEY` | `minioadmin` | Secret key |
-| `AWS_REGION` | `us-east-1` | AWS region |
-| `AWS_BUCKET_NAME` | `books4all-uploads` | S3 bucket name |
-| `PUBLIC_STORAGE_URL` | `http://localhost:9000` | Public storage URL |
+### Authentication
+- **JWT (HS256)** - Symmetric token signing
+- **Access Token TTL**: 15 minutes (configurable, 5-60 min)
+- **Refresh Token TTL**: 7 days (configurable, 1-30 days)
+- **Bcrypt Rounds**: 12 (configurable, 10-14)
+
+### OAuth Integrations
+- **Google OAuth** - Optional (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
+- **GitHub OAuth** - Optional (GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET)
+- Configurable redirect URIs per OAuth provider
+
+### Payment Gateway
+- **Stripe** - Payment processing
+  - Secret key configuration (sk_...)
+  - Publishable key for frontend (pk_...)
+  - Webhook secret for event verification (whsec_...)
+  - Webhook deduplication via Redis
+
+---
+
+## Configuration Management
+
+### Environment Variables
+Managed via **Pydantic Settings** from `.env` file:
+
+**Application**
+- `APP_NAME` - Application identifier
+- `APP_VERSION` - Semantic version
+- `DEBUG` - Debug mode flag
+- `ENVIRONMENT` - Deployment environment (development/staging/production)
+
+**Database**
+- `DATABASE_URL` - PostgreSQL async connection string (required)
+- `DATABASE_POOL_SIZE` - Connection pool size
+- `DATABASE_MAX_OVERFLOW` - Overflow connection limit
+- `DATABASE_ECHO` - SQL query logging
+
+**Redis**
+- `REDIS_URL` - Redis connection string
+- `REDIS_PASSWORD` - Optional Redis authentication
+
+**File Upload**
+- `MAX_UPLOAD_SIZE` - Max file size (default 5MB)
+- `ALLOWED_IMAGE_TYPES` - MIME types allowed (JPEG, PNG, WebP)
+
+**Security**
+- `SECRET_KEY` - JWT signing key (must be 32+ characters)
+- `JWT_ALGORITHM` - Token algorithm (default HS256)
+- `BCRYPT_ROUNDS` - Password hash iterations
+- `CORS_ORIGINS` - Allowed origins (comma-separated string or list)
+- `CORS_ALLOW_CREDENTIALS` - Enable credential requests
+- `CORS_ALLOW_METHODS` - Allowed HTTP methods
+- `CORS_ALLOW_HEADERS` - Allowed request headers
+
+**OAuth**
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REDIRECT_URI` - Callback URL
+- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
+- `GITHUB_REDIRECT_URI` - Callback URL
+
+**Payment**
+- `STRIPE_SECRET_KEY` - Stripe API key (optional)
+- `STRIPE_PUBLISHABLE_KEY` - Frontend Stripe key (optional)
+- `STRIPE_WEBHOOK_SECRET` - Webhook verification (optional)
+
+**Frontend**
+- `FRONTEND_URL` - Frontend URL for redirects
+
+---
+
+## Development Tools & Commands
 
 ### Frontend
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `FRONTEND_URL` | `http://localhost:3000` | Frontend URL for redirects |
-
----
-
-## Frontend Environment Variables
-
-### Exposed to Browser (NEXT_PUBLIC_*)
-| Variable | Description |
-|----------|-------------|
-| `NEXT_PUBLIC_API_URL` | Backend API base URL (e.g., `http://localhost:8000/api/v1`) |
-| `NEXT_PUBLIC_STRIPE_KEY` | Stripe publishable key (for client-side Stripe.js) |
-
----
-
-## Key Architecture Patterns
-
-### Three-Layer Backend
-```
-Request → API Endpoint (FastAPI router)
-        → Service Layer (business logic, typed exceptions)
-        → Repository Layer (async SQLAlchemy queries)
-        → PostgreSQL
+```bash
+npm run dev          # Start development server
+npm run build        # Production build
+npm start            # Start production server
+npm run lint         # Run ESLint
+npm run type-check   # TypeScript validation
+npm test             # Jest unit tests
+npm run test:e2e     # Playwright e2e tests
 ```
 
-### Session Lifecycle
-```
-FastAPI Request
-    ↓
-Dependency injection: get_db() → AsyncSession
-    ↓
-Service receives AsyncSession
-    ↓
-Repository queries via session
-    ↓
-Response sent
-    ↓
-Session closed (via context manager)
-```
-
-### Error Handling
-- **Service exceptions:** Typed exceptions (e.g., `BookNotFoundError`)
-- **HTTP mapping:** Global exception handlers map service exceptions to HTTP status codes
-- **Validation errors:** Pydantic RequestValidationError → 422
-- **Generic errors:** Caught by global handler; details hidden in production
-
-### Testing Architecture
-```
-Unit Tests (tests/unit/)
-  ├─ No DB, no HTTP
-  ├─ Mock ORM objects via SimpleNamespace
-  └─ Pure Python logic
-
-DB Tests (tests/DB/)
-  ├─ Real DB, rollback per test
-  └─ Model constraints, queries
-
-Integration Tests (tests/integration/)
-  ├─ AsyncClient + ASGI transport
-  ├─ Real DB with rollback session
-  └─ Full request/response cycle
+### Backend
+```bash
+uvicorn app.main:app --reload          # Development server
+alembic upgrade head                   # Run migrations
+alembic revision --autogenerate        # Create migration
+pytest                                 # Run tests
+pytest --cov=app                       # Coverage report
+black app/                             # Format code
+flake8 app/                            # Lint code
+mypy app/                              # Type check
 ```
 
 ---
 
-## Known Constraints & Gotchas
+## Version Constraints & Compatibility
 
-⚠️ **Bcrypt 5.x incompatible:** Keep `bcrypt==4.1.2` pinned. Do NOT upgrade.
+### Critical Dependencies
+- **Python 3.12+** required (backend)
+- **Node.js 20+** recommended (frontend)
+- **PostgreSQL 13+** recommended
+- **Redis 7+** recommended
 
-⚠️ **SQLAlchemy async:** Always `await session.execute(...)`. Use `AsyncSession` from `sqlalchemy.ext.asyncio`.
-
-⚠️ **Stripe webhooks:** Pass raw `Request.body()` to webhook verification, not parsed JSON.
-
-⚠️ **JWT type field:** Always verify token `type` claim (`access`, `refresh`, etc.) before acting on it.
-
-⚠️ **Password hashing limit:** passlib/bcrypt limits to ~72 bytes. Test passwords must fit.
-
-⚠️ **Alembic uses sync driver:** `SYNC_DATABASE_URL` must use `postgresql+psycopg2://`.
-
----
-
-## Deployment Checklist
-
-- [ ] Set `DEBUG=false` in production environment
-- [ ] Update `SECRET_KEY` (≥32 random chars)
-- [ ] Configure `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`
-- [ ] Set `CORS_ORIGINS` to frontend domain
-- [ ] Configure OAuth secrets (Google, GitHub)
-- [ ] Update `FRONTEND_URL` and `PUBLIC_STORAGE_URL`
-- [ ] Use `postgresql+psycopg2://` for Alembic (sync)
-- [ ] Use `postgresql+asyncpg://` for app (async)
-- [ ] Run migrations: `alembic upgrade head`
-- [ ] Scale backend to 2+ replicas
-- [ ] Enable Nginx SSL termination
-- [ ] Set resource limits in Docker Compose
-- [ ] Configure S3/CloudFront for file storage (not MinIO in prod)
+### Key Version Pins
+- FastAPI 0.109.0 (pinned for stability)
+- SQLAlchemy 2.0.25 (async support required)
+- Pydantic 2.5.3 (breaking changes from v1)
+- React 19.2.0 (latest stable)
+- Next.js 16.0.7 (latest stable)
 
 ---
 
-## Version Matrix
+## Summary
 
-| Layer | Tech | Version | Status |
-|-------|------|---------|--------|
-| **API** | FastAPI | 0.109.0 | Current |
-| **ORM** | SQLAlchemy | 2.0.25 | Async-ready |
-| **Auth** | python-jose | 3.3.0 | Current |
-| **Payments** | Stripe SDK | 7.11.0 | Current |
-| **Frontend** | Next.js | 16.0.7 | Latest |
-| **Frontend** | React | 19.2.0 | Latest |
-| **Runtime** | Python | 3.12 | Latest |
-| **Runtime** | Node.js | 18+ | LTS |
-
----
-
-**Generated:** 2026-04-18 | **Docs Last Updated:** 2026-04-18
+Books4All uses a modern, production-ready stack with:
+- **Async-first** backend (FastAPI + AsyncPG + Redis)
+- **Type-safe** design (TypeScript + Pydantic)
+- **Enterprise security** (JWT, OAuth, bcrypt, CSP headers)
+- **Payment integration** (Stripe with webhook deduplication)
+- **File storage** (S3/MinIO)
+- **Comprehensive testing** (pytest, Jest, Playwright)
+- **Development-friendly** (Docker, migrations, type checking)
