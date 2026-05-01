@@ -165,7 +165,15 @@ class Book(Base):
         nullable=True,
         doc="Number of pages"
     )
-    
+
+    # Versioning
+    version: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+        doc="Version field for optimistic locking"
+    )
+
     # Relationships
     seller: Mapped["User"] = relationship(
         "User",

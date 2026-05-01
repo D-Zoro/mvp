@@ -20,8 +20,9 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
+from app.core.config import settings
 from app.core.dependencies import ActiveUser, DBSession, require_rate_limit
 from app.core.rate_limiter import rate_limit
 from app.schemas.auth import (
@@ -75,6 +76,46 @@ def _map_auth_exception(exc: Exception) -> HTTPException:
     raise exc  # unexpected — let the global handler deal with it
 
 
+def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    """
+    Set HTTP-only secure cookies for authentication tokens.
+
+    Args:
+        response: FastAPI Response object
+        access_token: JWT access token
+        refresh_token: JWT refresh token
+    """
+    # Determine cookie domain and secure flag based on environment
+    cookie_domain = settings.FRONTEND_URL.split("://")[-1].split(":")[0] if "://" in settings.FRONTEND_URL else None
+    is_secure = settings.is_production
+
+    # Set access token cookie (15 minutes by default)
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        expires=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True,
+        secure=is_secure,
+        samesite="strict",
+        domain=cookie_domain if cookie_domain != "localhost" else None,
+        path="/",
+    )
+
+    # Set refresh token cookie (7 days by default)
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        expires=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        httponly=True,
+        secure=is_secure,
+        samesite="strict",
+        domain=cookie_domain if cookie_domain != "localhost" else None,
+        path="/",
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Registration & Login
 # ─────────────────────────────────────────────────────────────────────────────
@@ -84,7 +125,7 @@ def _map_auth_exception(exc: Exception) -> HTTPException:
     response_model=AuthResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Register a new user",
-    description="Create a new user account and return tokens + user info.",
+    description="Create a new user account and set JWT tokens via HTTP-only cookies.",
     responses={
         201: {"description": "User registered successfully"},
         409: {"description": "Email already in use"},
@@ -93,6 +134,7 @@ def _map_auth_exception(exc: Exception) -> HTTPException:
 )
 async def register(
     request: Request,
+    response: Response,
     payload: RegisterRequest,
     db: DBSession,
     _rate_limit: None = Depends(
@@ -102,13 +144,16 @@ async def register(
     """Register a new user account (rate limited: 3 per hour)."""
     try:
         svc = AuthService(db)
-        return await svc.register(
+        auth_response = await svc.register(
             email=payload.email,
             password=payload.password,
             first_name=payload.first_name,
             last_name=payload.last_name,
             role=payload.role,
         )
+        # Set HTTP-only secure cookies for tokens
+        _set_auth_cookies(response, auth_response.access_token, auth_response.refresh_token)
+        return auth_response
     except (
         EmailAlreadyExistsError,
         InvalidCredentialsError,
@@ -124,7 +169,7 @@ async def register(
     "/login",
     response_model=AuthResponse,
     summary="Login with email and password",
-    description="Authenticate with email/password and receive JWT tokens.",
+    description="Authenticate with email/password and receive JWT tokens via HTTP-only cookies.",
     responses={
         200: {"description": "Login successful"},
         401: {"description": "Invalid credentials"},
@@ -133,16 +178,20 @@ async def register(
 )
 async def login(
     request: Request,
+    response: Response,
     payload: LoginRequest,
     db: DBSession,
     _rate_limit: None = Depends(
         lambda req: require_rate_limit(req, "login", 5, 900)
     ),
 ) -> AuthResponse:
-    """Login and receive access + refresh tokens (rate limited: 5 per 15 minutes)."""
+    """Login and receive access + refresh tokens via HTTP-only cookies (rate limited: 5 per 15 minutes)."""
     try:
         svc = AuthService(db)
-        return await svc.login(email=payload.email, password=payload.password)
+        auth_response = await svc.login(email=payload.email, password=payload.password)
+        # Set HTTP-only secure cookies for tokens
+        _set_auth_cookies(response, auth_response.access_token, auth_response.refresh_token)
+        return auth_response
     except (
         InvalidCredentialsError,
         AccountInactiveError,
@@ -158,7 +207,7 @@ async def login(
     "/refresh",
     response_model=TokenResponse,
     summary="Refresh access token",
-    description="Exchange a valid refresh token for a new token pair.",
+    description="Exchange a valid refresh token (from cookie or body) for a new token pair.",
     responses={
         200: {"description": "Tokens refreshed"},
         400: {"description": "Invalid or expired refresh token"},
@@ -167,13 +216,17 @@ async def login(
 @rate_limit(calls=20, period=60)
 async def refresh_token(
     request: Request,
+    response: Response,
     payload: RefreshTokenRequest,
     db: DBSession,
 ) -> TokenResponse:
-    """Get a new access/refresh token pair."""
+    """Get a new access/refresh token pair and set via HTTP-only cookies."""
     try:
         svc = AuthService(db)
-        return await svc.refresh_token(refresh_token=payload.refresh_token)
+        token_response = await svc.refresh_token(refresh_token=payload.refresh_token)
+        # Set HTTP-only secure cookies for new tokens
+        _set_auth_cookies(response, token_response.access_token, token_response.refresh_token)
+        return token_response
     except (InvalidTokenError, AccountInactiveError) as exc:
         raise _map_auth_exception(exc)
 
@@ -181,15 +234,27 @@ async def refresh_token(
 @router.post(
     "/logout",
     summary="Logout",
-    description=(
-        "Logout the current user. Tokens are stateless JWTs — "
-        "the client should discard them. Returns 200 OK."
-    ),
+    description="Logout the current user and clear authentication cookies.",
     status_code=status.HTTP_200_OK,
 )
-async def logout(current_user: ActiveUser) -> dict:
-    """Logout endpoint — client-side token removal."""
+async def logout(current_user: ActiveUser, response: Response) -> dict:
+    """Logout endpoint — clear authentication cookies."""
     logger.info("User logged out: id=%s", current_user.id)
+    # Clear authentication cookies
+    response.delete_cookie(
+        key="access_token",
+        httponly=True,
+        secure=settings.is_production,
+        samesite="strict",
+        path="/",
+    )
+    response.delete_cookie(
+        key="refresh_token",
+        httponly=True,
+        secure=settings.is_production,
+        samesite="strict",
+        path="/",
+    )
     return {"message": "Logged out successfully"}
 
 

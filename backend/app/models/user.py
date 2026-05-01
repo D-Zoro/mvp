@@ -115,6 +115,15 @@ class User(Base):
         nullable=True,
         doc="User ID from OAuth provider"
     )
+
+    # Token revocation
+    jti: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+        unique=True,
+        default=uuid.uuid4,
+        doc="JWT ID for token revocation tracking"
+    )
     
     # Relationships
     books: Mapped[list["Book"]] = relationship(

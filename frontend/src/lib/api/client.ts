@@ -11,6 +11,8 @@ const client: AxiosInstance = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  // Enable credentials for HTTP-only cookie support (CORS requirement)
+  withCredentials: true,
 });
 
 let refreshPromise: Promise<string | null> | null = null;
