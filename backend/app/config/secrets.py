@@ -56,6 +56,12 @@ class SecretValidator(BaseModel):
         """
         Validate SECRET_KEY for hardcoded defaults and length.
 
+        Checks for:
+        - Placeholder values (change-this, changeme, etc.)
+        - Sequential patterns (1234567890, etc.)
+        - Minimum length requirement (32 chars)
+        - Default development keys
+
         Args:
             v: The SECRET_KEY value
 
@@ -65,29 +71,36 @@ class SecretValidator(BaseModel):
         Raises:
             ValueError: If key contains hardcoded defaults or is too short
         """
-        # Check for common placeholder values
+        # Check for common placeholder values and patterns
         dangerous_defaults = [
             "change-this",
             "changeme",
+            "secret-key",
             "secret",
             "default",
             "password",
             "1234567890",
+            "0123456789",
+            "development",
+            "test-key",
+            "my-secret",
         ]
 
         v_lower = v.lower()
         for danger in dangerous_defaults:
             if danger in v_lower:
                 logger.warning(
-                    "⚠️  SECURITY: SECRET_KEY contains placeholder value '%s' — "
-                    "Generate a new key with: openssl rand -hex 32",
+                    "[SECURITY] SECRET_KEY violation: contains placeholder '%s' — "
+                    "SECRET_KEY must be changed in production. "
+                    "Generate: openssl rand -hex 32",
                     danger,
                 )
 
         if len(v) < 32:
             logger.warning(
-                "⚠️  SECURITY: SECRET_KEY is too short (%d chars) — "
-                "Minimum 32 chars required. Generate with: openssl rand -hex 32",
+                "[SECURITY] SECRET_KEY violation: too short (%d chars) — "
+                "Minimum 32 characters required for adequate entropy. "
+                "Generate: openssl rand -hex 32",
                 len(v),
             )
 
@@ -97,9 +110,10 @@ class SecretValidator(BaseModel):
     @classmethod
     def validate_stripe_secret(cls, v: Optional[str], info: Any) -> Optional[str]:
         """
-        Validate STRIPE_SECRET_KEY for test/live prefixes.
+        Validate STRIPE_SECRET_KEY for test/live prefixes and dangerous patterns.
 
         Production environment requires sk_live_ prefix.
+        Detects test keys and placeholder values.
 
         Args:
             v: The STRIPE_SECRET_KEY value
@@ -116,18 +130,26 @@ class SecretValidator(BaseModel):
 
         env = info.data.get("ENVIRONMENT", "development")
 
-        # Check for test key in production
-        if env == "production" and v.startswith("sk_test_"):
-            logger.warning(
-                "🔴 CRITICAL SECURITY: STRIPE_SECRET_KEY uses test prefix (sk_test_) "
-                "in PRODUCTION environment — This will cause payment failures and "
-                "expose sensitive data. Use live key: sk_live_*"
-            )
-        elif not v.startswith(("sk_live_", "sk_test_")):
-            logger.warning(
-                "⚠️  SECURITY: STRIPE_SECRET_KEY has invalid format (doesn't start with "
-                "sk_live_ or sk_test_) — Verify this is a valid Stripe secret key"
-            )
+        # Check for placeholder/test patterns
+        if v.startswith("sk_test_"):
+            if env == "production":
+                logger.warning(
+                    "[SECURITY] STRIPE_SECRET_KEY violation: test key in production — "
+                    "sk_test_ keys must never be used in production. "
+                    "Configure sk_live_ key via environment variables."
+                )
+            else:
+                logger.warning(
+                    "[SECURITY] STRIPE_SECRET_KEY notice: using test key (sk_test_) — "
+                    "Remember to switch to sk_live_ before production deployment."
+                )
+        elif not v.startswith("sk_live_"):
+            if not v.startswith(("sk_", "rk_")):  # Allow restricted keys too
+                logger.warning(
+                    "[SECURITY] STRIPE_SECRET_KEY violation: invalid format — "
+                    "Must start with sk_live_ or sk_test_. "
+                    "Verify this is a valid Stripe API key from https://dashboard.stripe.com/apikeys"
+                )
 
         return v
 
@@ -135,7 +157,9 @@ class SecretValidator(BaseModel):
     @classmethod
     def validate_database_url(cls, v: str) -> str:
         """
-        Validate DATABASE_URL for hardcoded passwords.
+        Validate DATABASE_URL for hardcoded passwords and dangerous patterns.
+
+        Detects common hardcoded credentials in connection strings.
 
         Args:
             v: The DATABASE_URL value
@@ -143,20 +167,24 @@ class SecretValidator(BaseModel):
         Returns:
             The validated DATABASE_URL
         """
-        # Pattern to detect common hardcoded passwords
+        # Pattern to detect common hardcoded passwords and default credentials
         dangerous_patterns = [
-            r"password.*=.*password",  # password=password
-            r":password@",              # :password@
-            r":12345678@",              # :12345678@
-            r":root@",                  # :root@
+            (r"password.*=.*password", "password=password pattern"),
+            (r":password@", ":password@ (literal password)"),
+            (r":12345678@", ":12345678@ (sequential numbers)"),
+            (r":root@", ":root@ (root user without secure password)"),
+            (r":postgres@", ":postgres@ (postgres user without password)"),
+            (r"dbuser:dbpass", "dbuser:dbpass (default credentials)"),
         ]
 
         v_lower = v.lower()
-        for pattern in dangerous_patterns:
+        for pattern, description in dangerous_patterns:
             if re.search(pattern, v_lower, re.IGNORECASE):
                 logger.warning(
-                    "🔴 CRITICAL SECURITY: DATABASE_URL contains hardcoded password — "
-                    "Never commit database credentials. Use environment variables instead."
+                    "[SECURITY] DATABASE_URL violation: contains %s — "
+                    "Never commit database credentials. Use environment variables instead. "
+                    "Example format: postgresql+asyncpg://user:${DB_PASSWORD}@host:5432/db",
+                    description,
                 )
                 break
 
@@ -168,6 +196,8 @@ class SecretValidator(BaseModel):
         """
         Validate AWS credentials presence and format.
 
+        Detects invalid key formats and suspicious patterns.
+
         Args:
             v: The AWS credential value
             info: Validation context with other field values
@@ -178,12 +208,22 @@ class SecretValidator(BaseModel):
         if not v:
             return v
 
-        # AWS keys should not be extremely short (typical AKIAIOSFODNN7EXAMPLE)
+        # AWS Access Key IDs are typically 20 chars (AKIA prefix + 16 chars)
         if len(v) < 16:
             logger.warning(
-                "⚠️  SECURITY: AWS credential appears too short (<%d chars) — "
-                "Verify this is a valid AWS key",
+                "[SECURITY] AWS credential violation: too short (<%d chars) — "
+                "AWS Access Key IDs should be at least 16 characters. "
+                "Verify this is a valid AWS credential from https://console.aws.amazon.com/iam/",
                 len(v),
+            )
+
+        # Check for placeholder patterns in secret key
+        dangerous_aws_patterns = ["secret", "test", "change-this", "changeme"]
+        if any(pattern in v.lower() for pattern in dangerous_aws_patterns):
+            logger.warning(
+                "[SECURITY] AWS credential violation: contains placeholder — "
+                "AWS credentials must be real values from your AWS account. "
+                "Generate new credentials in IAM console."
             )
 
         return v
@@ -194,7 +234,10 @@ class SecretValidator(BaseModel):
         """
         Root validator for cross-field secret validation.
 
-        Checks environment-specific secret requirements.
+        Checks:
+        - Environment-specific secret requirements
+        - Production readiness of all critical secrets
+        - Consistency between environment and secret types
 
         Args:
             values: All validated field values
@@ -204,16 +247,24 @@ class SecretValidator(BaseModel):
         """
         env = values.get("ENVIRONMENT", "development")
 
-        # In production, all critical secrets must be set
+        # In production, all critical secrets must be set and valid
         if env == "production":
-            required_in_prod = ["STRIPE_SECRET_KEY", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
-            missing_in_prod = [k for k in required_in_prod if not values.get(k)]
+            required_in_prod = {
+                "STRIPE_SECRET_KEY": "Payment processing configuration",
+                "AWS_ACCESS_KEY_ID": "Cloud storage access",
+                "AWS_SECRET_ACCESS_KEY": "Cloud storage authentication",
+            }
+
+            missing_in_prod = []
+            for key, description in required_in_prod.items():
+                if not values.get(key):
+                    missing_in_prod.append(f"{key} ({description})")
 
             if missing_in_prod:
                 logger.warning(
-                    "🔴 CRITICAL SECURITY: Production environment missing secrets: %s — "
-                    "These must be configured via environment variables",
-                    ", ".join(missing_in_prod),
+                    "[SECURITY] Production validation failed: missing secrets — %s — "
+                    "Configure all required secrets via environment variables before deployment.",
+                    "; ".join(missing_in_prod),
                 )
 
         return values
