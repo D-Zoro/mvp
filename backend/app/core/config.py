@@ -130,6 +130,14 @@ class Settings(BaseSettings):
     
     # Frontend
     FRONTEND_URL: str = Field(default="http://localhost:3000", description="Frontend URL for redirect links")
+
+    #bucket 
+    AWS_ACCESS_KEY_ID: str = Field(default="admin")
+    AWS_SECRET_ACCESS_KEY: str = Field(default="password")
+    AWS_REGION: str = Field(default="us-east-1")
+    AWS_ENDPOINT_URL: str = Field(default="http://localhost:9000") # Fixed default
+    AWS_BUCKET_NAME: str = Field(default="books4all-uploads")
+    PUBLIC_STORAGE_URL: str = Field(default="http://localhost:9000")
     
     @property
     def stripe_enabled(self) -> bool:

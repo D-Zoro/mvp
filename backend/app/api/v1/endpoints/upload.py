@@ -1,14 +1,14 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from app.core.dependencies import get_current_active_user
 from app.services.storage import storage_service
-from app.schemas.user import User
+from app.schemas.user import UserResponse
 
 router = APIRouter()
 
 @router.post("/upload", response_model=dict)
 async def upload_file(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_active_user),
+    current_user: UserResponse = Depends(get_current_active_user),
 ):
     """
     Upload a file to storage (MinIO/S3).

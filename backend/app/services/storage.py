@@ -1,6 +1,7 @@
 import boto3
 from botocore.exceptions import ClientError
 from fastapi import UploadFile
+from app.core.config import settings
 import os
 from datetime import datetime
 import uuid
@@ -9,12 +10,12 @@ class StorageService:
     def __init__(self):
         self.s3_client = boto3.client(
             's3',
-            endpoint_url=os.getenv('AWS_ENDPOINT_URL', 'http://minio:9000'),
-            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID', 'minioadmin'),
-            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY', 'minioadmin'),
-            region_name=os.getenv('AWS_REGION', 'us-east-1')
+            endpoint_url=settings.AWS_ENDPOINT_URL,
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.AWS_REGION
         )
-        self.bucket_name = os.getenv('AWS_BUCKET_NAME', 'books4all-uploads')
+        self.bucket_name = settings.AWS_BUCKET_NAME
         self._ensure_bucket_exists()
 
     def _ensure_bucket_exists(self):
@@ -64,7 +65,7 @@ class StorageService:
             # Construct URL
             # In production, this would be the CloudFront/S3 URL
             # In dev, it's the MinIO URL accessible from the browser
-            base_url = os.getenv('PUBLIC_STORAGE_URL', 'http://localhost:9000')
+            base_url = settings.PUBLIC_STORAGE_URL
             return f"{base_url}/{self.bucket_name}/{filename}"
             
         except ClientError as e:
