@@ -137,10 +137,11 @@ app = FastAPI(
         "- ⭐ Verified-purchase book reviews\n\n"
         "## Authentication\n"
         "Most endpoints require a Bearer token obtained from `POST /api/v1/auth/login`."
+        "gomma dai"
     ),
     contact={
         "name": "Books4All Team",
-        "email": "support@books4all.example.com",
+        "email": "neonpulse142k@gmail.com",
     },
     license_info={
         "name": "MIT",
