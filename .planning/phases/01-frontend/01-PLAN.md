@@ -47,6 +47,158 @@ Build a complete, fully functional Next.js 15 frontend for Books4All that:
 - **API Contract**: OpenAPI 3.1.0 spec at `./docs/openapi.json`
 - **Tech Stack**: Next.js 15 (App Router), TypeScript, Tailwind CSS, React
 
+## ⚠️ Technical Gotchas (CRITICAL - Read Before Starting)
+
+### 1. Next.js 15 Async Params (BREAKING CHANGE)
+
+**The Problem**: In Next.js 15, `params` and `searchParams` in page components are **Promises**, not plain objects.
+
+**The Fix**: Always `await` params before using them:
+
+```typescript
+// ❌ WRONG (will fail in Next.js 15)
+export default function Page({ params }) {
+  const id = params.id; // Error: params is a Promise
+}
+
+// ✅ CORRECT
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  // Now fetch your book
+}
+```
+
+**Applies to**: 
+- `app/books/[id]/page.tsx`
+- `app/orders/[id]/page.tsx`
+- `app/seller/listings/[id]/edit/page.tsx`
+- Any page with dynamic route params
+
+### 2. OAuth Callback Routes (Separate by Provider)
+
+**The Problem**: Single `app/(auth)/callback/page.tsx` creates massive if/else blocks and makes debugging hard.
+
+**The Fix**: Create separate routes for each OAuth provider:
+
+```
+app/auth/callback/
+├── google/page.tsx      # Handle Google OAuth callback
+└── github/page.tsx      # Handle GitHub OAuth callback
+```
+
+**Each route**:
+- Receives `code` and optional `state` from provider
+- POSTs to respective endpoint (`/api/v1/auth/google/callback` or `/api/v1/auth/github/callback`)
+- Handles provider-specific error cases
+- Stores tokens, redirects to `/browse`
+
+### 3. Middleware Location & Runtime (Edge Limitations)
+
+**The Problem**: 
+- Middleware MUST be at project root (same level as `app/`), not in `lib/`
+- Middleware runs on **Edge runtime** (V8), not Node.js
+- Cannot use `jsonwebtoken` or heavy crypto libraries to verify JWTs
+
+**The Fix**:
+- File: `middleware.ts` (at root, not `lib/middleware.ts`)
+- Check for token existence only:
+  ```typescript
+  export function middleware(request: NextRequest) {
+    const token = request.cookies.get('access_token');
+    if (!token && request.nextUrl.pathname.startsWith('/seller')) {
+      return NextResponse.redirect(new URL('/auth/login', request.url));
+    }
+  }
+  ```
+- Let the API return 401 if token is invalid (rely on apiClient auto-refresh)
+
+### 4. Image Upload with FormData
+
+**The Problem**: Naive fetch for file uploads causes issues. Backend expects multipart form data.
+
+**The Fix** (in `lib/api.ts`):
+
+```typescript
+async upload(file: File): Promise<{ url: string }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const response = await fetch(`${this.baseURL}/upload`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${getAccessToken()}`,
+    },
+    body: formData, // Not JSON
+  });
+  
+  return response.json();
+}
+```
+
+### 5. MinIO/S3 Public URL in Docker
+
+**The Problem**: Backend returns `http://minio:9000/bucket/key` (internal Docker hostname). Browser can't reach it.
+
+**The Fix** (in `.env.local`):
+
+```env
+NEXT_PUBLIC_S3_URL=http://localhost:9000
+# OR production domain:
+# NEXT_PUBLIC_S3_URL=https://s3.example.com
+```
+
+Then construct URLs:
+```typescript
+const publicUrl = `${process.env.NEXT_PUBLIC_S3_URL}/books4all/${key}`;
+```
+
+### 6. Image Optimization with next/image
+
+**The Problem**: Raw `<img>` tags don't benefit from Next.js image optimization. S3 images need domain allowlist.
+
+**The Fix**:
+- Use `next/image` in BookCard:
+  ```typescript
+  import Image from 'next/image';
+  <Image
+    src={book.primary_image}
+    alt={book.title}
+    width={300}
+    height={400}
+    objectFit="cover"
+  />
+  ```
+
+- Update `next.config.ts`:
+  ```typescript
+  const nextConfig = {
+    images: {
+      remotePatterns: [
+        {
+          protocol: 'http',
+          hostname: 'localhost',
+          port: '9000',
+        },
+        {
+          protocol: 'https',
+          hostname: 'your-s3-domain.com',
+        },
+      ],
+    },
+  };
+  ```
+
+### 7. Design System: Text Contrast Rendering
+
+**The Problem**: High-contrast sans-serif (#1A1A1A on #F9F7F2) can "shimmer" on some displays.
+
+**The Fix**:
+- Use `font-weight: 400` (not 500) for body text
+- Add subtle `text-shadow: 0 0.5px 1px rgba(255,255,255,0.5)` for body text (very subtle anti-shimmer)
+- Keep headings at `font-weight: 600+` for impact
+
+---
+
 ## Architecture Overview
 
 ```
@@ -242,11 +394,57 @@ module.exports = {
 };
 ```
 
+### Next.js Configuration (next.config.ts)
+
+⚠️ **CRITICAL**: Configure image remotePatterns for S3/MinIO (see Technical Gotchas #6):
+
+```typescript
+import type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      // Development (MinIO)
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '9000',
+      },
+      // Production S3
+      {
+        protocol: 'https',
+        hostname: 's3.your-domain.com', // Replace with your actual S3 domain
+      },
+      // Alternative: AWS S3
+      {
+        protocol: 'https',
+        hostname: '*.amazonaws.com',
+      },
+    ],
+  },
+};
+
+export default nextConfig;
+```
+
+**Why this matters**: 
+- Without remotePatterns, `next/image` rejects external image URLs as a security measure
+- Must explicitly allow S3/MinIO domains or Next.js will refuse to optimize images
+- This unlocks image optimization, lazy loading, and responsive sizing in BookCard
+
 ### Accessibility
 
 - **Contrast Ratio**: `#1A1A1A` on `#F9F7F2` = 15.7:1 (WCAG AAA)
 - **Color Blindness**: Indigo + Emerald are distinguishable by people with most color vision deficiencies
 - **Font Sizes**: Minimum 14px for small text, 16px for body
+
+**Text Rendering (High-Contrast Prevention)** — See Technical Gotchas #7:
+- Body text: `font-weight: 400` (not 500) to reduce "shimmer" on high-contrast displays
+- Optional: Add subtle text-shadow for body text: `text-shadow: 0 0.5px 1px rgba(255,255,255,0.5)`
+- Headings: Keep `font-weight: 600+` for impact despite high contrast
+
+**Why this matters**: High-contrast sans-serif (#1A1A1A on #F9F7F2) can appear to shimmer or blur on some displays. Lighter weight + optional shadow makes it render cleanly while maintaining WCAG AAA contrast.
+
 - **Interactive Elements**: Min 44px × 44px touch target on mobile
 
 ## Key User Flows
@@ -548,17 +746,36 @@ Create `frontend/lib/auth.ts` with JWT token management:
 **Read first:**
 - `frontend/types/index.ts` (Book, Review, ReviewStats)
 - `./docs/openapi.json` (GET `/api/v1/books/{id}`, GET `/api/v1/books/{id}/reviews`, GET `/api/v1/books/{id}/reviews/stats`)
+- ⚠️ **CRITICAL**: Next.js 15 requires async params (see Technical Gotchas #1)
 
 **Action:**
-- Create `app/books/[id]/page.tsx`:
-  - Route param: `id` (book UUID)
+- Create `app/books/[id]/page.tsx` **as an async server component**:
+  ```typescript
+  // MUST be async and await params (Next.js 15 requirement)
+  export default async function Page({ 
+    params 
+  }: { 
+    params: Promise<{ id: string }> 
+  }) {
+    const { id } = await params;
+    
+    // Now fetch your data using id
+    const book = await apiClient.get<Book>(`/books/${id}`);
+    const stats = await apiClient.get<ReviewStats>(`/books/${id}/reviews/stats`);
+    const reviews = await apiClient.get<ReviewListResponse>(`/books/${id}/reviews?page=1&per_page=10`);
+    
+    // ... render JSX
+  }
+  ```
+  
+  - Route param: `id` (book UUID) — **must await before using**
   - Fetch book from `/api/v1/books/{id}`
   - Fetch review stats from `/api/v1/books/{id}/reviews/stats`
   - Fetch first page of reviews from `/api/v1/books/{id}/reviews?page=1&per_page=10`
   
   - Display:
     - **Book Info Section**:
-      - Large image (primary_image)
+      - Large image (primary_image) — use `next/image` with proper remotePatterns config
       - Title, author, ISBN, publisher, publication_year, page_count
       - Condition badge, price, quantity available
       - Description (long form)
@@ -782,11 +999,27 @@ Create `frontend/lib/auth.ts` with JWT token management:
     - images (optional, file upload, max 10 images)
     - status (optional, radio: draft or active, default draft)
   
-  - Image upload:
+  - Image upload (⚠️ See Technical Gotchas #4, #5, #6):
     - File input (accept images only)
-    - Preview uploaded images
-    - POST `/api/v1/upload` for each file, get public URL
-    - Display URLs in form state
+    - Preview uploaded images locally
+    - Upload: POST `/api/v1/upload` for each file **using FormData**:
+      ```typescript
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch('/api/v1/upload', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData, // NOT JSON
+      });
+      const { url } = await response.json();
+      ```
+    - Backend returns public URL
+    - **CRITICAL**: If using MinIO in Docker, configure `NEXT_PUBLIC_S3_URL` in `.env.local`:
+      ```env
+      NEXT_PUBLIC_S3_URL=http://localhost:9000
+      ```
+      Then construct URLs: `${process.env.NEXT_PUBLIC_S3_URL}/bucket/key`
+    - Display preview using `next/image` (with remotePatterns config)
     - Remove button for each image
   
   - Form actions:
@@ -794,28 +1027,42 @@ Create `frontend/lib/auth.ts` with JWT token management:
     - "Publish" button (POST/PUT with status=active)
     - "Cancel" button
   
-  - Error display
-  - Loading state
+  - Error display (image upload failures, validation errors)
+  - Loading state during file upload and form submission
 
 - Create `app/seller/listings/create/page.tsx`:
+  - ⚠️ **CRITICAL**: If this uses dynamic route params, await them (Next.js 15)
   - Render `<BookListingForm mode="create" />`
   - On submit: POST `/api/v1/books` → redirect to `/seller/listings`
 
 - Create `app/seller/listings/[id]/edit/page.tsx`:
-  - Route param: `id` (book UUID)
+  - ⚠️ **CRITICAL**: Must be async and await params (Next.js 15 requirement):
+    ```typescript
+    export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+      const { id } = await params;
+      const book = await apiClient.get<Book>(`/books/${id}`);
+      // ... render
+    }
+    ```
+  - Route param: `id` (book UUID) — **must await**
   - Fetch book from `/api/v1/books/{id}` on mount
   - Render `<BookListingForm mode="edit" book={book} />`
   - On submit: PUT `/api/v1/books/{id}` → redirect to `/seller/listings` or show success message
 
 **Acceptance criteria:**
 - BookListingForm has inputs for all fields: title, author, condition, price, quantity, description, images, etc.
+- Image upload **uses FormData**, not JSON
 - Image upload POSTs to `/api/v1/upload`, stores returned URLs
+- Images rendered with `next/image` component (not raw `<img>`)
+- `next.config.ts` has `remotePatterns` for S3 domain (localhost:9000 or production)
+- `.env.local` configured with `NEXT_PUBLIC_S3_URL` for correct public image URLs
 - "Save Draft" button POSTs/PUTs with status=draft
 - "Publish" button POSTs/PUTs with status=active
 - Form validation: required fields checked, price > 0, quantity 1-1000
-- Error messages shown on API failure
-- Loading state during submission
+- Error messages shown on API failure (including image upload failures)
+- Loading state during submission and image upload
 - On success: redirect to listing detail or listings page
+- Edit page properly awaits async params before using `id`
 
 ---
 
@@ -912,19 +1159,37 @@ Create `frontend/lib/auth.ts` with JWT token management:
 
 #### 5.4 Add OAuth integration (Google & GitHub)
 **Action:**
-- Create OAuth callback page: `app/(auth)/callback/page.tsx`
-- Handle OAuth response (code + state parameters)
-- POST to `/api/v1/auth/google/callback` or `/api/v1/auth/github/callback`
-- Store tokens, redirect to `/browse` or `/seller/listings` based on role
-- Add "Login with Google" and "Login with GitHub" buttons to auth forms
-- Redirect to OAuth authorization URL on button click
+- ⚠️ **CRITICAL**: Create SEPARATE callback routes for each provider (see Technical Gotchas #2)
+  - `app/auth/callback/google/page.tsx` — Handle Google OAuth callback
+  - `app/auth/callback/github/page.tsx` — Handle GitHub OAuth callback
+  
+  This prevents massive if/else blocks and makes debugging provider-specific errors much easier.
+
+- For each callback page:
+  - Receive `code` (authorization code) and optional `state` (CSRF token) from query params
+  - POST to respective endpoint:
+    - Google: `POST /api/v1/auth/google/callback` with `{ code, state }`
+    - GitHub: `POST /api/v1/auth/github/callback` with `{ code, state }`
+  - Handle provider-specific errors (invalid code, expired, user denied)
+  - Store `access_token` and `refresh_token` in localStorage
+  - Redirect to `/browse` (buyer) or `/seller/listings` (seller) based on user role
+  - Show error page if callback fails (e.g., "Login with Google failed. Try again?")
+
+- Add OAuth buttons to `components/AuthForm.tsx`:
+  - "Login with Google" button:
+    - Click → fetch OAuth URL from `GET /api/v1/auth/google`
+    - Redirect to `authorization_url` (with state param)
+  - "Login with GitHub" button: same flow
+  - Style: secondary buttons, `border border-[#E5E7EB] rounded-sm px-6 py-2 hover:bg-[#F9F7F2]`
 
 **Acceptance criteria:**
 - OAuth buttons on login/register pages
 - Click "Login with Google" → redirects to Google login
 - Google returns code → app POSTs to `/api/v1/auth/google/callback`
-- Tokens stored, user logged in, redirect to `/browse`
-- Same for GitHub
+- Provider-specific errors handled gracefully (show friendly message)
+- Tokens stored, user logged in, redirect to `/browse` or `/seller/listings`
+- Same flow for GitHub
+- Separate routes prevent provider conflicts
 
 ---
 
