@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     
     # Database
     DATABASE_URL: str = Field(
-        default="postgresql+asyncpg://neo:gottacomedmra@localhost:5432/books4all_dev",
+        # default="postgresql+asyncpg://neo:gottacomedmra@localhost:5432/books4all_dev",
         description="PostgreSQL connection URL (async driver)"
     )
     DATABASE_POOL_SIZE: int = Field(default=5, ge=1, le=20, description="Connection pool size")
@@ -122,6 +122,28 @@ class Settings(BaseSettings):
         default=["image/jpeg", "image/png", "image/webp"],
         description="Allowed image MIME types"
     )
+    
+    # Stripe Payments
+    STRIPE_SECRET_KEY: Optional[str] = Field(default=None, description="Stripe secret key (sk_...)")
+    STRIPE_PUBLISHABLE_KEY: Optional[str] = Field(default=None, description="Stripe publishable key (pk_...)")
+    STRIPE_WEBHOOK_SECRET: Optional[str] = Field(default=None, description="Stripe webhook endpoint secret (whsec_...)")
+    
+    # Frontend
+    FRONTEND_URL: str = Field(default="http://localhost:3000", description="Frontend URL for redirect links")
+
+    #bucket 
+    AWS_ACCESS_KEY_ID: str = Field(default="admin")
+    AWS_SECRET_ACCESS_KEY: str = Field(default="password")
+    AWS_REGION: str = Field(default="us-east-1")
+    AWS_ENDPOINT_URL: str = Field(default="http://localhost:9000") # Fixed default
+    AWS_BUCKET_NAME: str = Field(default="books4all-uploads")
+    PUBLIC_STORAGE_URL: str = Field(default="http://localhost:9000")
+    
+    @property
+    def stripe_enabled(self) -> bool:
+        """Check if Stripe is configured."""
+        return bool(self.STRIPE_SECRET_KEY)
+    
     
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

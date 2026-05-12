@@ -14,7 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+
 lib64/
 parts/
 sdist/
@@ -206,4 +206,4 @@ storybook-static/
 tmp/
 temp/
 
-code_log/
+

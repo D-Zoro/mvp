@@ -1,0 +1,14 @@
+{
+  "id": "session-1777562778037",
+  "startedAt": "2026-04-30T15:26:18.037Z",
+  "cwd": "/home/neonpulse/Dev/codezz/Books4All",
+  "context": {},
+  "metrics": {
+    "edits": 3,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "endedAt": "2026-04-30T15:30:55.827Z",
+  "duration": 277790
+}
