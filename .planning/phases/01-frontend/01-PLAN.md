@@ -121,25 +121,133 @@ frontend/
 ### Upload (`/api/v1/upload`)
 - `POST /` — Upload file (book images)
 
-## Design System
+## Design System: Modern Academic
 
-**Colors:**
-- Primary: `#4F46E5` (Indigo)
-- Background: `#F9F7F2` (Off-white)
-- Text: `#1A1A1A` (Dark)
-- Secondary text: `#A4ACAF` (Gray)
-- Border: `#E5E7EB` (Light gray)
+**Philosophy**: High-end bookstore in Tokyo. Minimalist library. Reduce eye strain. Feel like physical paper.
+Avoid Amazon clutter. No social noise (like Facebook). Premium, focused, bookish.
 
-**Typography:**
-- Serif font for headings (via `font-serif` class)
-- Sans-serif for body (system default)
-- Font size: base 16px, lg 18px, xl 20px, 2xl 24px, 3xl 30px, 4xl 36px, 5xl 48px
+### Color Palette: Subtle Cream & Ink
 
-**Layout:**
-- Container max-width: `1280px` (handled by Tailwind `container` class)
-- Padding: 6 units (24px) horizontal on large screens
-- Gap between items: 6 units (24px)
-- Rounded corners: minimal (use `rounded-sm` for sharp aesthetic)
+| Role | Hex | Visual | Usage |
+|------|-----|--------|-------|
+| **Background** | `#F9F7F2` | Off-white/Eggshell | Main page background (paper feel) |
+| **Foreground** | `#1A1A1A` | Deep Ink | Body text, high readability |
+| **Accent** | `#4F46E5` | Modern Indigo | Primary actions (buttons, links, hover states) |
+| **Success** | `#10B981` | Emerald | "Paid" status, success confirmations |
+| **Muted** | `#E5E7EB` | Soft Gray | Borders, dividers, secondary UI |
+
+**Design Notes:**
+- `#F9F7F2` reduces eye strain (warm cream vs cold white)
+- `#1A1A1A` provides high contrast for readability (not pure black)
+- `#4F46E5` is modern but refined (not neon, not flat)
+- `#10B981` signals success without aggression
+- `#E5E7EB` separates without harsh lines
+
+### Typography
+
+| Element | Font | Weight | Size | Usage |
+|---------|------|--------|------|-------|
+| **H1 (Page Title)** | Playfair Display (Serif) | 700 Bold | 48px / 3rem | Hero, section headers (bookish premium feel) |
+| **H2 (Section Header)** | Playfair Display (Serif) | 600 Semi-bold | 36px / 2.25rem | Major sections |
+| **H3 (Subsection)** | Inter (Sans-serif) | 600 Semi-bold | 24px / 1.5rem | Subsections, card titles |
+| **Body Text** | Inter (Sans-serif) | 400 Regular | 16px / 1rem | Paragraphs, descriptions, UI labels |
+| **Small Text** | Inter (Sans-serif) | 400 Regular | 14px / 0.875rem | Captions, metadata, timestamps |
+| **Monospace** | JetBrains Mono | 400 Regular | 14px / 0.875rem | Prices, ISBNs, codes (dev environment match) |
+
+**Why This Mix:**
+- **Playfair Display** for headings = "Bookish" premium (serif adds tradition, literary feel)
+- **Inter** for body = Clean, modern UI (excellent readability on screens)
+- **JetBrains Mono** for data = Familiar to developers, matches your environment
+
+### Line Heights & Spacing
+
+- **Headings**: `line-height: 1.2` (tight, powerful)
+- **Body**: `line-height: 1.6` (generous for comfort reading)
+- **Inputs/Forms**: `line-height: 1.5`
+
+### Layout & Spacing
+
+- **Container**: `max-width: 1280px` (Tailwind `container` class)
+- **Padding**: `24px` (6 units) horizontal on large screens, `16px` (4 units) on mobile
+- **Gap between items**: `24px` (6 units) for visual breathing room
+- **Rounded corners**: `rounded-sm` (minimal, sharp aesthetic — no rounded pill buttons)
+- **Card borders**: `1px solid #E5E7EB` (soft, not harsh)
+
+### Component Styling Examples
+
+**Buttons:**
+- Primary (CTA): `bg-[#4F46E5] text-white rounded-sm px-8 py-3`
+- Secondary: `border-2 border-[#1A1A1A] text-[#1A1A1A] rounded-sm px-8 py-3`
+- Success: `bg-[#10B981] text-white rounded-sm px-8 py-3`
+
+**Cards:**
+- Background: `bg-white` (or `bg-[#F9F7F2]` for subtle depth)
+- Border: `border-l-4 border-[#4F46E5]` (left accent stripe for visual interest)
+- Padding: `p-6` (24px)
+- Shadow: `shadow-sm` (subtle, not heavy)
+
+**Form Inputs:**
+- Border: `1px solid #E5E7EB`
+- Focus: `focus:border-[#4F46E5] focus:ring-1 focus:ring-[#4F46E5]`
+- Placeholder: `text-[#A4ACAF]`
+
+**Status Badges:**
+- **Active/Paid**: `bg-[#10B981]/10 text-[#10B981]` (soft green background, green text)
+- **Draft**: `bg-[#E5E7EB] text-[#1A1A1A]` (gray)
+- **Sold/Archived**: `bg-[#F9F7F2] text-[#A4ACAF]` (muted)
+
+### Dark Mode (Optional Future)
+Not required for Phase 1, but design is light-first (cream bg resists dark mode need).
+
+### Implementation in Tailwind
+
+Add to `globals.css` or `tailwind.config.ts`:
+```css
+@layer base {
+  body {
+    @apply bg-[#F9F7F2] text-[#1A1A1A] font-sans;
+  }
+  
+  h1, h2 { @apply font-serif font-bold; }
+  h3 { @apply font-semibold; }
+  
+  a { @apply text-[#4F46E5] hover:underline; }
+  
+  input, textarea, select {
+    @apply border border-[#E5E7EB] rounded-sm focus:border-[#4F46E5] focus:ring-1 focus:ring-[#4F46E5];
+  }
+}
+```
+
+Or in `tailwind.config.ts`:
+```typescript
+module.exports = {
+  theme: {
+    colors: {
+      cream: '#F9F7F2',
+      ink: '#1A1A1A',
+      indigo: '#4F46E5',
+      emerald: '#10B981',
+      gray: {
+        muted: '#E5E7EB',
+        secondary: '#A4ACAF',
+      },
+    },
+    fontFamily: {
+      serif: ['Playfair Display', 'serif'],
+      sans: ['Inter', 'sans-serif'],
+      mono: ['JetBrains Mono', 'monospace'],
+    },
+  },
+};
+```
+
+### Accessibility
+
+- **Contrast Ratio**: `#1A1A1A` on `#F9F7F2` = 15.7:1 (WCAG AAA)
+- **Color Blindness**: Indigo + Emerald are distinguishable by people with most color vision deficiencies
+- **Font Sizes**: Minimum 14px for small text, 16px for body
+- **Interactive Elements**: Min 44px × 44px touch target on mobile
 
 ## Key User Flows
 
@@ -217,34 +325,44 @@ Create `frontend/lib/auth.ts` with JWT token management:
 
 **Action:**
 - Update `globals.css` with:
-  - Tailwind base styles
-  - Color palette CSS variables (optional, or use Tailwind color names)
-  - Typography rules (serif headings)
-  - Default body styles (bg-[#F9F7F2], text-[#1A1A1A])
+  - `@layer base` styles:
+    - `body { @apply bg-[#F9F7F2] text-[#1A1A1A] font-sans; }`
+    - `h1, h2 { @apply font-serif font-bold; }`
+    - `h3 { @apply font-semibold; }`
+    - `a { @apply text-[#4F46E5] hover:underline; }`
+  - Import fonts: Playfair Display (serif headings), Inter (body), JetBrains Mono (data)
+  - Set line heights: headings 1.2, body 1.6, inputs 1.5
+  - Default body styles from Modern Academic section
 
 - Update `app/layout.tsx` root layout:
   - Import Header, Footer
   - Wrap children with `<Header/>` at top, `<Footer/>` at bottom
   - Set meta tags (title, description)
-  - Apply global background color
+  - Apply global background color: `bg-[#F9F7F2]`
+  - Font families: `font-sans` (Inter) by default
 
 - Refine `components/Header.tsx`:
-  - Logo (left)
-  - Navigation links: Browse, Sell (centered or right)
+  - Logo/brand (left, serif styling with Playfair)
+  - Navigation links: "Browse", "Sell" (Inter, underline on hover)
   - Auth state: if logged in → user menu + logout; if not → Login / Register buttons
   - Mobile responsive (hamburger menu for small screens)
-  - Use Tailwind classes from design system (colors, spacing)
+  - Colors: text-[#1A1A1A], hover text-[#4F46E5], accent borders in [#E5E7EB]
 
 - Refine `components/Footer.tsx`:
   - Company info, links, copyright
   - Simple layout (3 columns: About, Links, Contact)
-  - Use same color scheme
+  - Use same color scheme: text-[#1A1A1A], borders [#E5E7EB]
 
 **Acceptance criteria:**
 - `app/layout.tsx` renders `<Header/>` and `<Footer/>` around `{children}`
+- `globals.css` imports Playfair Display, Inter, JetBrains Mono from Google Fonts or local
 - `Header.tsx` shows "Login / Register" when not authenticated, user menu when authenticated
 - `Footer.tsx` has 3+ sections with links
-- All components use Tailwind classes from design system (colors from spec)
+- All components use Tailwind classes matching Modern Academic spec:
+  - Text: `text-[#1A1A1A]` (body), `text-[#A4ACAF]` (secondary)
+  - Accents: `text-[#4F46E5]`, `border-[#E5E7EB]`
+  - Background: `bg-[#F9F7F2]`
+- Playfair Display used for brand/headings, Inter for UI text
 - Meta tags in layout include at least `<title>`, `<meta name="description">`
 
 ---
@@ -257,38 +375,74 @@ Create `frontend/lib/auth.ts` with JWT token management:
 
 **Action:**
 - Update or create `components/AuthForm.tsx`:
+  - **Layout & Styling** (Modern Academic):
+    - Wrapper: `bg-white max-w-md shadow-sm rounded-sm p-8 border-l-4 border-[#4F46E5]`
+    - Heading: Playfair Display serif, `text-3xl font-bold text-[#1A1A1A] mb-6`
+    - Form: `space-y-4`
+  
   - Accepts `mode: 'login' | 'register' | 'reset'`
-  - For **login**: email + password inputs → POST `/api/v1/auth/login` → store tokens → redirect `/browse`
-  - For **register**: email + password + first_name + last_name + role selector → POST `/api/v1/auth/register` → store tokens → redirect based on role (buyer → `/browse`, seller → `/seller/listings`)
-  - For **reset**: email input → POST `/api/v1/auth/forgot-password` → success message
-  - Error display for invalid credentials, validation errors
-  - Loading state during API call
+  
+  - Form inputs styling:
+    - Label: Inter, `block text-sm font-semibold text-[#1A1A1A] mb-2`
+    - Input: `border border-[#E5E7EB] rounded-sm px-4 py-2 focus:border-[#4F46E5] focus:ring-1 focus:ring-[#4F46E5] w-full`
+    - Helper text: `text-xs text-[#A4ACAF]`
+  
+  - For **login**: 
+    - email + password inputs
+    - POST `/api/v1/auth/login`
+    - store tokens in localStorage
+    - redirect `/browse`
+    - Submit button: `bg-[#4F46E5] text-white rounded-sm px-8 py-3 w-full hover:bg-[#3c37c4]`
+  
+  - For **register**:
+    - email + password + first_name + last_name + role selector inputs
+    - Role selector: radio buttons (Buyer / Seller)
+    - POST `/api/v1/auth/register`
+    - redirect based on role (buyer → `/browse`, seller → `/seller/listings`)
+  
+  - For **reset**:
+    - email input
+    - POST `/api/v1/auth/forgot-password`
+    - success message: "Check your email for reset link" (green text, [#10B981])
+  
+  - Error display:
+    - `bg-red-50 border border-red-200 rounded-sm p-4 text-red-700 text-sm` (for errors)
+  - Loading state: button disabled with spinner, `opacity-50 cursor-not-allowed`
 
 - Create `app/(auth)/login/page.tsx`:
   - Render `<AuthForm mode="login" />`
-  - "Don't have an account? Register here" link to `/auth/register`
-  - Layout: centered form, 400px width
+  - Layout: `min-h-screen flex items-center justify-center bg-[#F9F7F2]`
+  - Form centered on page
+  - "Don't have an account? Register here" link: `text-[#4F46E5] hover:underline`
 
 - Create `app/(auth)/register/page.tsx`:
+  - Same layout as login
   - Render `<AuthForm mode="register" />`
-  - Role selector (buyer/seller)
-  - "Already have an account? Login here" link to `/auth/login`
+  - Role selector clearly labeled
+  - "Already have an account? Login here" link: `text-[#4F46E5] hover:underline`
 
 - Create `app/(auth)/forgot-password/page.tsx`:
+  - Same layout as login
   - Simple form with email input
   - POST `/api/v1/auth/forgot-password`
-  - Success message: "Check your email for reset link"
+  - Success message in emerald: `text-[#10B981]`
+  - "Back to Login" link
 
 - Create `app/(auth)/reset-password/page.tsx`:
+  - Same layout as login
   - URL param: `?token=<reset_token>`
   - Form: new_password + confirm password
+  - Password validation: match check before submit
   - POST `/api/v1/auth/reset-password` with token and new password
-  - Redirect to login on success
+  - Success message (emerald), redirect to login on success
 
 **Acceptance criteria:**
 - `components/AuthForm.tsx` exports component that accepts `mode` prop
+- Form has left accent stripe (border-l-4 border-[#4F46E5]), white bg, subtle shadow
+- Heading uses Playfair Display serif font
+- All inputs styled with Modern Academic: border-[#E5E7EB], focus border-[#4F46E5]
 - Login form POSTs to `/api/v1/auth/login`, stores `access_token` and `refresh_token` in localStorage
-- Register form includes email, password, first_name, last_name, role inputs; POSTs to `/api/v1/auth/register`
+- Register form includes email, password, first_name, last_name, role selector inputs; POSTs to `/api/v1/auth/register`
 - Forgot password form POSTs to `/api/v1/auth/forgot-password`
 - Reset password form POSTs to `/api/v1/auth/reset-password` with token parameter
 - All forms show error messages on failure
@@ -354,19 +508,38 @@ Create `frontend/lib/auth.ts` with JWT token management:
   - Error state: show error message with retry button
 
 - Update `components/BookCard.tsx`:
-  - Display: book image (primary_image), title, author, price, condition badge, seller name, rating
+  - **Design**: Card with left accent stripe (Modern Academic style)
+    - Background: `bg-white` with subtle shadow `shadow-sm`
+    - Left border: `border-l-4 border-[#4F46E5]` (accent stripe)
+    - Padding: `p-6` (24px)
+  - Display:
+    - Book image (primary_image): responsive `w-full h-40 object-cover`
+    - Title (h3): Playfair Display, `font-serif font-semibold text-xl text-[#1A1A1A]`
+    - Author: Inter, `text-sm text-[#A4ACAF]`
+    - Price: JetBrains Mono, `font-mono text-lg font-bold text-[#4F46E5]`
+    - Condition badge:
+      - New: `bg-[#10B981]/10 text-[#10B981]`
+      - Like New: `bg-[#4F46E5]/10 text-[#4F46E5]`
+      - Good: `bg-[#E5E7EB] text-[#1A1A1A]`
+      - Acceptable: `bg-[#E5E7EB] text-[#A4ACAF]`
+    - Seller name: Inter, `text-xs text-[#A4ACAF]`
+    - Rating: Stars or text, `text-[#4F46E5]`
   - Click → navigate to `/books/{id}`
-  - Show "Add to Cart" button (disabled for now, store in state)
+  - "Add to Cart" button:
+    - Primary style: `bg-[#4F46E5] text-white rounded-sm px-8 py-3 hover:bg-[#3c37c4]`
+    - Disabled: `opacity-50 cursor-not-allowed`
 
 **Acceptance criteria:**
 - `app/browse/page.tsx` fetches from `/api/v1/books` on mount
 - Search input filters books by query (debounced, max 300ms)
 - Category dropdown populated from `/api/v1/books/categories`
 - Condition checkboxes filter by condition
-- Price range inputs filter min/max
+- Price range inputs filter min/max with JetBrains Mono styling
 - Sort selector changes sort_by and sort_order
 - Results paginate with "Previous" / "Next" buttons
-- BookCard displays at least: title, author, price, condition, image, seller name
+- BookCard displays: title (Playfair serif), author, price (monospace), condition badge (color-coded), image, seller name
+- BookCard has left accent stripe in indigo, white background, subtle shadow
+- "Add to Cart" button styled as primary (indigo background)
 - Error state shows "Failed to load books. Retry?" with retry button
 
 ---
