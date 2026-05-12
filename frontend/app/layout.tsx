@@ -1,25 +1,35 @@
 import type { Metadata } from "next";
-import { Manrope, Inter } from "next/font/google";
-import { Header } from "@/components/layout/Header";
-import { QueryProvider } from "@/providers/QueryProvider";
-import { Toaster } from "sonner";
+import { Playfair_Display, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const manrope = Manrope({
+const playfairDisplay = Playfair_Display({
+  variable: "--font-serif",
   subsets: ["latin"],
-  variable: "--font-manrope",
-  display: "swap",
+  weight: ["600", "700"],
 });
 
 const inter = Inter({
+  variable: "--font-sans",
   subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
+  weight: ["400", "500"],
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-mono",
+  subsets: ["latin"],
+  weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
-  title: "Books4All",
-  description: "The Digital Curator - Second-hand book marketplace",
+  title: "Books4All — Curated Used Books",
+  description:
+    "A modern academic marketplace for discovering and selling quality used books. Clean. Intentional. Bookish.",
+  keywords: [
+    "used books",
+    "second-hand books",
+    "book marketplace",
+    "independent bookstore",
+  ],
 };
 
 export default function RootLayout({
@@ -28,16 +38,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${manrope.variable} ${inter.variable}`}>
-      <body className="font-body bg-surface text-on-surface antialiased">
-        <QueryProvider>
-          <Header />
-          <main className="pt-20 min-h-screen">
-            {children}
-          </main>
-          <Toaster richColors position="top-right" />
-        </QueryProvider>
-      </body>
+    <html
+      lang="en"
+      className={`${playfairDisplay.variable} ${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
+    >
+      <body className="min-h-screen flex flex-col">{children}</body>
     </html>
   );
 }

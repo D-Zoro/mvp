@@ -1,77 +1,222 @@
-"use client";
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+import BookCard from '@/components/BookCard';
+import Link from 'next/link';
 
-import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
-import BookCard from "@/components/ui/BookCard";
-import * as booksApi from "@/lib/api/books";
-import { Skeleton } from "@/components/ui/skeleton";
+// Mock data for demo
+const featuredBooks = [
+  {
+    id: '1',
+    title: 'The Elements of Style',
+    author: 'William Strunk Jr.',
+    price: 12.99,
+    condition: 'like_new' as const,
+    seller: 'Jane Smith',
+    rating: 4.8,
+    href: '/books/1',
+  },
+  {
+    id: '2',
+    title: 'On Typography',
+    author: 'Erik Spiekermann',
+    price: 24.50,
+    condition: 'good' as const,
+    seller: 'Marcus Lee',
+    rating: 4.9,
+    href: '/books/2',
+  },
+  {
+    id: '3',
+    title: 'Thinking with Type',
+    author: 'Ellen Lupton',
+    price: 18.75,
+    condition: 'fair' as const,
+    seller: 'Emma Wilson',
+    rating: 4.6,
+    href: '/books/3',
+  },
+  {
+    id: '4',
+    title: 'A Room of One\'s Own',
+    author: 'Virginia Woolf',
+    price: 9.99,
+    condition: 'like_new' as const,
+    seller: 'David Park',
+    rating: 4.7,
+    href: '/books/4',
+  },
+  {
+    id: '5',
+    title: 'The Craft of Research',
+    author: 'Wayne C. Booth',
+    price: 21.00,
+    condition: 'good' as const,
+    seller: 'Sarah Chen',
+    rating: 4.9,
+    href: '/books/5',
+  },
+  {
+    id: '6',
+    title: 'Modest Proposal & Other Satires',
+    author: 'Jonathan Swift',
+    price: 14.25,
+    condition: 'fair' as const,
+    seller: 'Tom Anderson',
+    rating: 4.5,
+    href: '/books/6',
+  },
+];
 
 export default function Home() {
-  const { data: books, isLoading, error } = useQuery({
-    queryKey: ["books"],
-    queryFn: () => booksApi.getBooks(),
-  });
-
   return (
-    <div>
-      {/* Hero Section */}
-      <section className="relative min-h-[70vh] flex items-center justify-center overflow-hidden">
-        {/* Background blobs */}
-        <div className="absolute inset-0 -z-10">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/20 blur-[120px] rounded-full"></div>
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary/20 blur-[120px] rounded-full"></div>
-        </div>
+    <div className="min-h-screen flex flex-col bg-[#F9F7F2]">
+      <Header />
 
-        {/* Content */}
-        <div className="text-center max-w-2xl px-8">
-          <h1 className="text-5xl md:text-6xl font-headline font-bold mb-6 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            Curated Literary Excellence
-          </h1>
-          <p className="text-lg md:text-xl text-on-surface/80 mb-8 leading-relaxed">
-            Discover rare editions, first prints, and timeless classics curated for collectors and book lovers.
-          </p>
-          <Link
-            href="/books"
-            className="inline-block px-8 py-3 bg-primary text-on-primary font-semibold rounded-lg hover:bg-primary/90 transition-colors"
-          >
-            Explore Collection
-          </Link>
-        </div>
-      </section>
+      <main className="flex-1">
+        {/* Hero Section */}
+        <section className="container mx-auto px-6 py-16 md:py-24">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-12 items-center">
+            {/* Left: Text (occupies 3/5) */}
+            <div className="md:col-span-3 space-y-6">
+              <h1 className="font-serif text-4xl md:text-5xl font-bold leading-tight">
+                Discover Curated Books,{' '}
+                <span className="text-[#4F46E5]">Purposefully</span>
+              </h1>
 
-      {/* Featured Section */}
-      <section className="max-w-7xl mx-auto px-8 py-20">
-        <h2 className="text-3xl font-headline font-bold mb-12 text-on-surface">
-          New Arrivals
-        </h2>
+              <p className="text-lg text-[#A4ACAF] leading-relaxed max-w-lg">
+                Books4All is a modern marketplace for quality used books. No clutter. No
+                noise. Just beautiful books, trusted sellers, and thoughtful curation.
+              </p>
 
-        {/* Loading state */}
-        {isLoading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            {[...Array(8)].map((_, i) => (
-              <Skeleton key={i} className="h-96 rounded-lg" />
-            ))}
+              <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                <Link
+                  href="/browse"
+                  className="inline-block bg-[#4F46E5] text-white font-medium px-8 py-3 rounded-sm hover:bg-[#3c37c4] transition-colors text-center"
+                >
+                  Start Browsing
+                </Link>
+                <Link
+                  href="/sell"
+                  className="inline-block border-2 border-[#1A1A1A] text-[#1A1A1A] font-medium px-8 py-3 rounded-sm hover:bg-[#1A1A1A] hover:text-white transition-colors text-center"
+                >
+                  Become a Seller
+                </Link>
+              </div>
+
+              {/* Stats */}
+              <div className="flex gap-8 pt-8 border-t border-[#E5E7EB]">
+                <div>
+                  <div className="font-mono font-bold text-2xl text-[#4F46E5]">
+                    12.5k+
+                  </div>
+                  <p className="text-sm text-[#A4ACAF]">Books Listed</p>
+                </div>
+                <div>
+                  <div className="font-mono font-bold text-2xl text-[#4F46E5]">
+                    3.8k+
+                  </div>
+                  <p className="text-sm text-[#A4ACAF]">Trusted Sellers</p>
+                </div>
+                <div>
+                  <div className="font-mono font-bold text-2xl text-[#4F46E5]">
+                    98%
+                  </div>
+                  <p className="text-sm text-[#A4ACAF]">Positive Reviews</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Whitespace (occupies 2/5) – breathing room */}
+            <div className="hidden md:block md:col-span-2" />
           </div>
-        )}
+        </section>
 
-        {/* Error state */}
-        {error && (
-          <div className="text-center py-12">
-            <p className="text-on-surface/60">
-              Failed to load books. Please try again later.
+        {/* Featured Books Section */}
+        <section className="container mx-auto px-6 py-16">
+          <div className="mb-12">
+            <h2 className="font-serif text-3xl font-bold mb-2">Featured This Week</h2>
+            <p className="text-[#A4ACAF]">
+              Hand-picked selections from our most trusted sellers.
             </p>
           </div>
-        )}
 
-        {/* Books grid */}
-        {!isLoading && !error && books && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            {books.items.slice(0, 8).map((book) => (
-              <BookCard key={book.id} book={book} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {featuredBooks.map((book) => (
+              <BookCard key={book.id} {...book} />
             ))}
           </div>
-        )}
-      </section>
+
+          <div className="text-center pt-12">
+            <Link
+              href="/browse"
+              className="inline-block text-[#4F46E5] font-medium hover:underline"
+            >
+              View All Books →
+            </Link>
+          </div>
+        </section>
+
+        {/* How It Works Section */}
+        <section className="bg-white border-t border-[#E5E7EB] py-16">
+          <div className="container mx-auto px-6">
+            <h2 className="font-serif text-3xl font-bold mb-12 text-center">
+              How It Works
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {[
+                {
+                  number: '1',
+                  title: 'Browse & Discover',
+                  description:
+                    'Explore our curated collection of quality used books across all genres and subjects.',
+                },
+                {
+                  number: '2',
+                  title: 'Review & Verify',
+                  description:
+                    'Read detailed condition reports and seller reviews before making a purchase decision.',
+                },
+                {
+                  number: '3',
+                  title: 'Order & Receive',
+                  description:
+                    'Complete checkout securely and receive your books with care and attention to detail.',
+                },
+              ].map((step) => (
+                <div key={step.number} className="text-center space-y-4">
+                  <div className="inline-block w-12 h-12 border-2 border-[#4F46E5] rounded-sm flex items-center justify-center">
+                    <span className="font-serif font-bold text-lg text-[#4F46E5]">
+                      {step.number}
+                    </span>
+                  </div>
+                  <h3 className="font-serif font-semibold text-xl">{step.title}</h3>
+                  <p className="text-[#A4ACAF] max-w-xs mx-auto">{step.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* CTA Section */}
+        <section className="container mx-auto px-6 py-16">
+          <div className="bg-[#4F46E5] text-white rounded-sm p-12 text-center space-y-6">
+            <h2 className="font-serif text-3xl font-bold">Ready to Sell?</h2>
+            <p className="text-lg opacity-90 max-w-lg mx-auto">
+              Turn your bookshelf into income. Join thousands of sellers who trust
+              Books4All.
+            </p>
+            <Link
+              href="/auth/register?role=seller"
+              className="inline-block bg-white text-[#4F46E5] font-medium px-8 py-3 rounded-sm hover:bg-opacity-90 transition-colors"
+            >
+              List Your Books
+            </Link>
+          </div>
+        </section>
+      </main>
+
+      <Footer />
     </div>
   );
 }
