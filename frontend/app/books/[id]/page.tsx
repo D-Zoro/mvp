@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api';
+import ReviewFormClient from './ReviewFormClient';
+import AddToCartClient from './AddToCartClient';
 import type { BookResponse, ReviewListResponse, ReviewStats } from '@/types';
 
 export default async function BookDetailPage({
@@ -79,9 +81,13 @@ export default async function BookDetailPage({
                     </span>
                   </div>
 
-                  <button className="w-full bg-[#4F46E5] text-white font-medium py-3 rounded-sm hover:bg-[#3c37c4] transition-colors">
-                    Add to Cart
-                  </button>
+                  <AddToCartClient
+                    bookId={book.id}
+                    title={book.title}
+                    author={book.author}
+                    price={parseFloat(book.price)}
+                    image={book.primary_image}
+                  />
                 </div>
               </div>
             </div>
@@ -159,7 +165,7 @@ export default async function BookDetailPage({
               </h2>
 
               {/* Rating Stats */}
-              <div className="flex items-center gap-6">
+              <div className="flex items-center gap-6 mb-6">
                 <div className="text-center">
                   <p className="font-mono text-4xl font-bold text-[#4F46E5]">
                     {stats.average_rating?.toFixed(1) || '—'}
@@ -192,6 +198,9 @@ export default async function BookDetailPage({
                   ))}
                 </div>
               </div>
+
+              {/* Leave Review Form */}
+              <ReviewFormClient bookId={id} />
             </div>
 
             {/* Reviews List */}
