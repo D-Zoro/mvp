@@ -126,7 +126,7 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             buyer_id=buyer_id,
             total_amount=total_amount,
             status=OrderStatus.PENDING,
-            shipping_address=str(shipping_address),  # Serialize to string
+            shipping_address=shipping_address,  # Store as JSON dict
             notes=notes,
         )
         self.db.add(order)

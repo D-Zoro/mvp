@@ -16,7 +16,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -92,9 +92,9 @@ class Order(Base):
     
     # Shipping
     shipping_address: Mapped[Optional[dict]] = mapped_column(
-        Text,
+        JSON,
         nullable=True,
-        doc="Shipping address as JSON string"
+        doc="Shipping address as JSON object"
     )
     
     # Notes

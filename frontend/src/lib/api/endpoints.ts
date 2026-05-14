@@ -1,0 +1,42 @@
+export const API = {
+  auth: {
+    register: "/api/auth/register",
+    login: "/api/auth/login",
+    logout: "/api/auth/logout",
+    refresh: "/api/auth/refresh",
+    me: "/api/auth/me",
+    verifyEmail: "/api/auth/verify-email",
+    forgotPassword: "/api/auth/forgot-password",
+    resetPassword: "/api/auth/reset-password",
+    googleUrl: "/api/auth/google",
+    googleCallback: "/api/auth/google/callback",
+    githubUrl: "/api/auth/github",
+    githubCallback: "/api/auth/github/callback",
+  },
+  books: {
+    list: "/api/books",
+    create: "/api/books",
+    myListings: "/api/books/my-listings",
+    categories: "/api/books/categories",
+    detail: (id: string) => `/api/books/${id}`,
+    update: (id: string) => `/api/books/${id}`,
+    delete: (id: string) => `/api/books/${id}`,
+    publish: (id: string) => `/api/books/${id}/publish`,
+    reviews: (id: string) => `/api/books/${id}/reviews`,
+    reviewStats: (id: string) => `/api/books/${id}/reviews/stats`,
+  },
+  reviews: {
+    update: (id: string) => `/api/reviews/${id}`,
+    delete: (id: string) => `/api/reviews/${id}`,
+  },
+  orders: {
+    list: "/api/orders",
+    create: "/api/orders",
+    detail: (id: string) => `/api/orders/${id}`,
+    cancel: (id: string) => `/api/orders/${id}/cancel`,
+  },
+  payments: {
+    checkout: (orderId: string) => `/api/payments/checkout/${orderId}`,
+  },
+  upload: "/api/upload",
+} as const;
