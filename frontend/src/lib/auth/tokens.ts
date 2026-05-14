@@ -1,3 +1,4 @@
+import type { NextResponse } from "next/server";
 import type { AuthTokens } from "@/types/auth";
 
 export const TOKEN_KEYS = {
@@ -26,26 +27,23 @@ export function getBrowserCookie(name: string): string | null {
   );
 }
 
-export function setAuthCookies(response: Response, tokens: AuthTokens) {
-  response.headers.append(
-    "Set-Cookie",
-    `${TOKEN_KEYS.access}=${tokens.access_token}; Path=/; Max-Age=${tokens.expires_in}; SameSite=Lax; HttpOnly${
-      process.env.NODE_ENV === "production" ? "; Secure" : ""
-    }`,
-  );
-  response.headers.append(
-    "Set-Cookie",
-    `${TOKEN_KEYS.refresh}=${tokens.refresh_token}; Path=/; Max-Age=${60 * 60 * 24 * 30}; SameSite=Lax; HttpOnly${
-      process.env.NODE_ENV === "production" ? "; Secure" : ""
-    }`,
-  );
+export function setAuthCookies(response: NextResponse, tokens: AuthTokens) {
+  response.cookies.set({
+    name: TOKEN_KEYS.access,
+    value: tokens.access_token,
+    ...cookieOptions,
+    maxAge: tokens.expires_in,
+  });
+  response.cookies.set({
+    name: TOKEN_KEYS.refresh,
+    value: tokens.refresh_token,
+    ...cookieOptions,
+    maxAge: 60 * 60 * 24 * 30,
+  });
 }
 
-export function clearAuthCookies(response: Response) {
+export function clearAuthCookies(response: NextResponse) {
   for (const key of Object.values(TOKEN_KEYS)) {
-    response.headers.append(
-      "Set-Cookie",
-      `${key}=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly${process.env.NODE_ENV === "production" ? "; Secure" : ""}`,
-    );
+    response.cookies.delete(key);
   }
 }
