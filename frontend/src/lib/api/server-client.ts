@@ -1,7 +1,10 @@
 import { cookies } from "next/headers";
 import { TOKEN_KEYS } from "@/lib/auth/tokens";
 
-const API_PREFIX = "/api/v1";
+function apiPrefix() {
+  const prefix = process.env.BACKEND_API_PREFIX ?? "/api/v1";
+  return prefix.startsWith("/") ? prefix : `/${prefix}`;
+}
 
 export class ApiRequestError extends Error {
   constructor(
@@ -15,8 +18,9 @@ export class ApiRequestError extends Error {
 
 export function backendUrl(path: string) {
   const base = process.env.BACKEND_URL ?? "http://localhost:8000";
+  const prefix = apiPrefix();
   const normalized = path.startsWith("/") ? path : `/${path}`;
-  return `${base}${normalized.startsWith(API_PREFIX) ? normalized : `${API_PREFIX}${normalized}`}`;
+  return `${base}${normalized.startsWith(prefix) ? normalized : `${prefix}${normalized}`}`;
 }
 
 export async function serverFetch<T>(path: string, options: RequestInit = {}): Promise<T> {

@@ -9,7 +9,7 @@ import type { ForgotPasswordInput, LoginInput, RegisterInput, ResetPasswordInput
 export function useMe(options?: Omit<UseQueryOptions<User, Error>, "queryKey" | "queryFn">) {
   return useQuery({
     queryKey: queryKeys.auth.me(),
-    queryFn: async () => (await apiClient.get<User>(API.auth.me)).data,
+    queryFn: async () => (await apiClient.get<User>(API.auth.me, { headers: { "x-skip-refresh": "true" } })).data,
     ...options,
   });
 }

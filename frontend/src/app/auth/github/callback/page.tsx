@@ -1,5 +1,12 @@
 "use client";
 
-import GoogleCallbackPage from "../../google/callback/page";
+import { Suspense } from "react";
+import { OAuthCallback } from "@/components/auth/oauth-callback";
 
-export default GoogleCallbackPage;
+export default function GithubCallbackPage() {
+  return (
+    <Suspense>
+      <OAuthCallback provider="github" />
+    </Suspense>
+  );
+}
