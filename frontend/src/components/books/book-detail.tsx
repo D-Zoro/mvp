@@ -16,7 +16,7 @@ export function BookDetail({ book }: { book: Book }) {
         <div className="lg:col-span-5">
           <div className="sticky top-24 rounded-sm border border-border bg-surface-muted p-4">
             <div className="relative aspect-[2/3] overflow-hidden rounded-sm bg-surface">
-              <ImageWithFallback src={book.images?.[0]} alt={book.title} priority className="object-cover" />
+              <ImageWithFallback src={book.images_urls?.[0]} alt={book.title} priority className="object-cover" />
             </div>
           </div>
         </div>
