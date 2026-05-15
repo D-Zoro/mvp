@@ -155,7 +155,11 @@ class BookRepository(BaseRepository[Book, BookCreate, BookUpdate]):
         Returns:
             List of matching books
         """
-        stmt = select(Book).where(Book.deleted_at.is_(None))
+        stmt = (
+            select(Book)
+            .options(selectinload(Book.seller))
+            .where(Book.deleted_at.is_(None))
+        )
         
         # Text search
         if query:

@@ -47,7 +47,14 @@ class StorageService:
 
     async def upload_file(self, file: UploadFile, folder: str = "books") -> str:
         """
-        Upload a file to S3/MinIO and return the public URL.
+        Upload a file to S3/MinIO and return only the relative S3 key.
+        
+        This prevents database lock-in to specific storage providers.
+        The relative key can be combined with PUBLIC_STORAGE_URL by clients
+        or computed fields in response schemas.
+        
+        Returns:
+            str: Relative S3 key (e.g., 'uploads/2026/05/uuid.jpg')
         """
         # Generate unique filename
         ext = os.path.splitext(file.filename)[1]
@@ -62,11 +69,9 @@ class StorageService:
                 ExtraArgs={'ContentType': file.content_type}
             )
             
-            # Construct URL
-            # In production, this would be the CloudFront/S3 URL
-            # In dev, it's the MinIO URL accessible from the browser
-            base_url = settings.PUBLIC_STORAGE_URL
-            return f"{base_url}/{self.bucket_name}/{filename}"
+            # Return only the relative key (not the full URL)
+            # This allows frontend/schemas to construct URLs dynamically
+            return filename
             
         except ClientError as e:
             print(f"Error uploading file: {e}")
