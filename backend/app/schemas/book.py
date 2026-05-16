@@ -6,8 +6,9 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, computed_field
 
+from app.core.config import settings
 from app.models.book import BookCondition, BookStatus
 from app.schemas.base import BaseSchema, PaginatedResponse, ResponseSchema
 from app.schemas.user import UserBriefResponse
@@ -144,14 +145,15 @@ class BookCreate(BookBase):
     @field_validator("images")
     @classmethod
     def validate_images(cls, v: Optional[list[str]]) -> Optional[list[str]]:
-        """Validate image URLs."""
+        """Validate image keys. Accepts both relative keys (uploads/...) and absolute URLs."""
         if v is None:
             return v
         if len(v) > 10:
             raise ValueError("Maximum 10 images allowed")
-        for url in v:
-            if not url.startswith(("http://", "https://")):
-                raise ValueError(f"Invalid image URL: {url}")
+        for image_key in v:
+            # Accept relative keys (uploads/2026/05/uuid.jpg) or absolute URLs (http://...)
+            if not (image_key.startswith(("http://", "https://", "uploads/"))):
+                raise ValueError(f"Invalid image key: {image_key}")
         return v
 
 
@@ -205,7 +207,23 @@ class BookResponse(ResponseSchema):
     condition: BookCondition = Field(..., description="Book condition")
     price: Decimal = Field(..., description="Price in USD")
     quantity: int = Field(..., description="Available quantity")
-    images: Optional[list[str]] = Field(None, description="Image URLs")
+    images: Optional[list[str]] = Field(None, description="Image S3 keys (relative paths)")
+    
+    @computed_field  # type: ignore[misc]
+    @property
+    def images_urls(self) -> Optional[list[str]]:
+        """
+        Dynamically construct full URLs from relative S3 keys.
+        
+        This allows switching storage providers without database migration.
+        """
+        if not self.images:
+            return None
+        return [
+            f"{settings.PUBLIC_STORAGE_URL}/{settings.AWS_BUCKET_NAME}/{img}"
+            for img in self.images
+        ]
+    
     status: BookStatus = Field(..., description="Listing status")
     category: Optional[str] = Field(None, description="Category")
     publisher: Optional[str] = Field(None, description="Publisher")
@@ -251,7 +269,19 @@ class BookBriefResponse(BaseSchema):
     author: str = Field(..., description="Book author")
     price: Decimal = Field(..., description="Price")
     condition: BookCondition = Field(..., description="Condition")
-    primary_image: Optional[str] = Field(None, description="Primary image URL")
+    primary_image: Optional[str] = Field(None, description="Primary image S3 key (relative)")
+    
+    @computed_field  # type: ignore[misc]
+    @property
+    def primary_image_url(self) -> Optional[str]:
+        """
+        Dynamically construct full URL from relative S3 key.
+        
+        This allows switching storage providers without database migration.
+        """
+        if not self.primary_image:
+            return None
+        return f"{settings.PUBLIC_STORAGE_URL}/{settings.AWS_BUCKET_NAME}/{self.primary_image}"
 
 
 class BookListResponse(PaginatedResponse[BookResponse]):

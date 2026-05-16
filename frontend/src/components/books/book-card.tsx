@@ -9,7 +9,7 @@ export function BookCard({ book, actions }: { book: Book; actions?: React.ReactN
   return (
     <article className="group relative flex flex-col overflow-hidden rounded-sm border border-border bg-surface shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:shadow-md">
       <Link href={`/books/${book.id}`} className="relative aspect-[2/3] w-full overflow-hidden bg-surface-muted">
-        <ImageWithFallback src={book.images?.[0]} alt={book.title} sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw" className="object-cover transition-transform duration-300 group-hover:scale-105" />
+        <ImageWithFallback src={book.images_urls?.[0]} alt={book.title} sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw" className="object-cover transition-transform duration-300 group-hover:scale-105" />
         <ConditionBadge condition={book.condition} className="absolute right-2 top-2 px-2 py-1" />
       </Link>
       <div className="flex flex-grow flex-col p-4">

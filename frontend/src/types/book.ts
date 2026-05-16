@@ -17,6 +17,7 @@ export interface Book extends BookBrief {
   condition: BookCondition;
   price: string;
   quantity: number;
+  images_urls: string[] | null;
   status: BookStatus;
   category: string | null;
   publisher: string | null;
